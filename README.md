@@ -17,14 +17,15 @@ Kotlin + WebView套壳
 ## root本地拉取
 要一次性拉取多本书建议走本地
 
-- 设置路径指向刺猬猫data目录
-数据库目录
+设置路径指向刺猬猫data目录
+
+- 数据库目录
 `/data/data/com.kuangxiangciweimao.novel/databases`
 
-章节目录
+- 章节目录
 `/data/data/com.kuangxiangciweimao.novel/files/novelCiwei/reader/booksnew`
 
-密钥目录
+- 密钥目录
 `/data/data/com.kuangxiangciweimao.novel/files/Y2hlcy8`
 
 ## 如安卓无root
