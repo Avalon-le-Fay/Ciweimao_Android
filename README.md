@@ -6,6 +6,7 @@ Kotlin + WebView套壳
 0. 建议app抓包登录
 
 因为被服务器判定为风险账号会弹人机验证，可能会卡登录；被判为风险还有可能强制叫你去改密。
+  
   其次就是我没接人机验证😃 短信验证码登录接口也没接，等什么时候想更再说
   
   
@@ -43,9 +44,7 @@ PC安卓模拟器＝mumu模拟器/雷电模拟器/...
 
 ## Android APK 构建（纯 Kotlin 后端 + WebView）
 
-项目已提供完整 Android 工程目录：`/home/runner/work/cwm_download_web/cwm_download_web/android`
-
-
+项目已提供完整 Android 工程目录
 
 ### 说明
 - 首次启动密码：@admin325
