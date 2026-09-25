@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://*.geetest.com https://*.geevisit.com https://*.gsensebot.com; style-src 'unsafe-inline' https://*.geetest.com https://*.geevisit.com https://*.gsensebot.com; connect-src https://*.geetest.com https://*.geevisit.com https://*.gsensebot.com; img-src data: blob: https://*.geetest.com https://*.geevisit.com https://*.gsensebot.com; frame-src https://*.geetest.com https://*.geevisit.com https://*.gsensebot.com; font-src data: https://*.geetest.com https://*.geevisit.com https://*.gsensebot.com; base-uri 'none'; form-action 'none'">
+<title>人机验证</title><style>
+body{font-family:sans-serif;margin:0;padding:24px;color:#172125;background:#fff;box-sizing:border-box}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+h1{font-size:20px;margin:0}button{font:inherit;background:#fff;border:1px solid #aab3b8;padding:10px 16px;border-radius:6px}
+#captcha{margin:40px auto;max-width:340px;width:100%;min-height:100px}#status{font-size:14px;color:#4b555c}
+</style></head><body><header><h1>人机验证</h1><button id="cancel" type="button">取消</button></header>
+<p id="status">正在加载极验…</p><div id="captcha"></div><script>
+(function(){
+  'use strict';
+  var config=__CWM_GEETEST_CONFIG__;
+  var finished=false;
+  function notify(kind,data){
+    if(finished)return;finished=true;
+    window.location.href='cwm-captcha://'+kind+(data?'?data='+encodeURIComponent(JSON.stringify(data)):'');
+  }
+  document.getElementById('cancel').onclick=function(){notify('cancel');};
+  var loader=document.createElement('script');
+  loader.src='https://static.geetest.com/static/js/gt.0.5.0.js';
+  loader.onerror=function(){notify('error');};
+  loader.onload=function(){
+    if(typeof window.initGeetest!=='function'){notify('error');return;}
+    window.initGeetest({gt:config.gt,challenge:config.challenge,offline:false,new_captcha:config.new_captcha,
+      product:'popup',width:'100%',https:true,lang:'zh-cn',timeout:20000},function(captcha){
+      captcha.appendTo('#captcha');
+      captcha.onReady(function(){document.getElementById('status').textContent='请点击下方按钮完成验证';});
+      captcha.onSuccess(function(){var result=captcha.getValidate();if(result)notify('result',result);});
+      captcha.onError(function(){notify('error');});
+    });
+  };
+  document.head.appendChild(loader);
+})();
+</script></body></html>
