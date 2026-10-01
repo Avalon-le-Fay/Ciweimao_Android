@@ -1,0 +1,18 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>theme-switch #two</title>
+<script src="theme-switch.js"></script>
+<style>
+:root{ background:#efefef; }
+html[data-theme="dark"]{ background:#16181d; }
+body{ margin:0; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px;
+  font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif; transition:background .4s; }
+.tip{ color:#888; font-size:14px } html[data-theme="dark"] .tip{ color:#aaa }
+theme-switch{ width:48px; height:48px }
+#two{ --theme-switch-icon-color:#EECC08; background:#fff; border-radius:8px; padding:13px; box-shadow:#0000002d 0 2px 4px }
+[data-theme="dark"] #two{ --theme-switch-icon-color:#0883ee; background:#fff }
+</style></head>
+<body>
+<theme-switch id="two"></theme-switch>
+<div class="tip">点击切换 · 亮/暗/跟随系统 三态平滑变形</div>
+</body></html>

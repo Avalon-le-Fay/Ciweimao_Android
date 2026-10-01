@@ -1,0 +1,10 @@
+/.gradle
+/build
+**/build
+local.properties
+captures
+/.idea
+# Generated APK bundles
+/*.apk
+/*.aab
+/*.apks

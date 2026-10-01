@@ -1,0 +1,24 @@
+# Local agent backups
+.agent-backups/
+
+# Python caches and test state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local runtime data, private session/account state and user settings
+.flask_secret
+.online_account.json
+.cache_config
+.cache_split_config
+.cache_source_mode
+.export_auto_cleanup
+.export_favdirs
+.import_favsrc
+/data/
+/output/
+
+# Local logs and temporary files
+*.log
+*.tmp
+*.swp
