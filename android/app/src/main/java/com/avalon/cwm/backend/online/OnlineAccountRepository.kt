@@ -4,6 +4,7 @@ import android.content.Context
 import com.avalon.cwm.backend.core.JsonFiles
 import com.avalon.cwm.backend.core.RuntimePaths
 import com.avalon.cwm.backend.online.latest.LatestProtocol
+import com.avalon.cwm.backend.online.latest.OfficialNativeEnvironment
 import org.json.JSONObject
 
 class OnlineAccountRepository(
@@ -244,9 +245,17 @@ class OnlineAccountRepository(
             "supported_abis",
         )
 
-        @Suppress("UNUSED_PARAMETER")
+        /**
+         * The official native transport is only selected when this environment
+         * can actually execute the bundled ARM closure. PC emulators and other
+         * x86 translation hosts automatically stay on OkHttp (see
+         * [OfficialNativeEnvironment]); the signed request bytes are identical
+         * for both transports.
+         */
         fun defaultTransport(appVersion: String): String =
-            if (LatestProtocol.isLatestVersion(appVersion)) {
+            if (LatestProtocol.isLatestVersion(appVersion) &&
+                OfficialNativeEnvironment.unavailableReason() == null
+            ) {
                 CIWEIMAO_TRANSPORT_OFFICIAL_NATIVE
             } else {
                 CIWEIMAO_TRANSPORT_OKHTTP

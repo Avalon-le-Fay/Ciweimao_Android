@@ -3,6 +3,7 @@ package com.avalon.cwm.backend.online
 import android.content.Context
 import android.os.Build
 import com.avalon.cwm.backend.online.latest.LatestProtocol
+import com.avalon.cwm.backend.online.latest.OfficialNativeEnvironment
 
 const val CIWEIMAO_DEFAULT_SEED = "zG2nSeEfSHfvTCHy5LCcqtBbQehKNLXn"
 /** 366 网关。`requestLegacy` 兜底路径也走这里，避免误用其它网关。 */
@@ -94,7 +95,9 @@ data class CiweimaoClientConfig(
     val deviceProfile: Map<String, String> = emptyMap(),
     val readerId: String = "",
     val shelfId: String = "",
-    val transportBackend: String = if (appVersion.trim() == CIWEIMAO_LATEST_VERSION) {
+    val transportBackend: String = if (appVersion.trim() == CIWEIMAO_LATEST_VERSION &&
+        OfficialNativeEnvironment.unavailableReason() == null
+    ) {
         CIWEIMAO_TRANSPORT_OFFICIAL_NATIVE
     } else {
         CIWEIMAO_TRANSPORT_OKHTTP

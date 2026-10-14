@@ -3,6 +3,7 @@ package com.avalon.cwm.backend.online
 import com.avalon.cwm.backend.core.CiweimaoCrypto
 import com.avalon.cwm.backend.online.latest.LatestProtocol
 import com.avalon.cwm.backend.online.latest.OfficialNativeTransport
+import com.avalon.cwm.backend.online.latest.OfficialNativeUnavailableException
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -169,14 +170,24 @@ class CiweimaoTransport(private val config: CiweimaoClientConfig) {
         return if (config.transportBackend == CIWEIMAO_TRANSPORT_OFFICIAL_NATIVE) {
             val context = config.nativeContext
                 ?: throw IOException("2.9.365 official_native 缺少 Android Context")
-            val response = OfficialNativeTransport.post(
-                context = context,
-                path = path,
-                userAgent = config.userAgent(),
-                body = body,
-                timeoutSeconds = config.timeoutSeconds,
-            )
-            RawHttpResponse(response.statusCode, response.ciphertext)
+            try {
+                val response = OfficialNativeTransport.post(
+                    context = context,
+                    path = path,
+                    userAgent = config.userAgent(),
+                    body = body,
+                    timeoutSeconds = config.timeoutSeconds,
+                )
+                RawHttpResponse(response.statusCode, response.ciphertext)
+            } catch (error: OfficialNativeUnavailableException) {
+                // Environments that cannot execute the official ARM closure
+                // (PC emulators, missing/damaged libraries) must not lose the
+                // request: the signed body is transport-independent, so OkHttp
+                // sends the identical bytes. A hard native crash cannot be
+                // caught here — that is why the environment is refused before
+                // any System.loadLibrary call (see OfficialNativeEnvironment).
+                requestLatestOkHttp(path, body)
+            }
         } else {
             requestLatestOkHttp(path, body)
         }

@@ -18,7 +18,25 @@ internal data class OfficialHttpResponse(
     val ciphertext: String,
 )
 
-/** Adapter for the verified official 2.9.365 libcurl/OpenSSL ABI closure. */
+/**
+ * Thrown when the official native closure must not (or cannot) run on this
+ * device. Callers fall back to the OkHttp transport, which sends the exact
+ * same signed bytes.
+ */
+internal class OfficialNativeUnavailableException(
+    message: String,
+    cause: Throwable? = null,
+) : IOException(message, cause)
+
+/**
+ * Adapter for the verified official 2.9.365 libcurl/OpenSSL ABI closure.
+ *
+ * The closure is ARM-only. Environments that can only run it through a binary
+ * translation bridge (PC emulators) are refused up front via
+ * [OfficialNativeEnvironment] because loading it there has been observed to
+ * take the whole process down with an uncatchable native crash; callers catch
+ * [OfficialNativeUnavailableException] and switch to OkHttp.
+ */
 internal object OfficialNativeTransport {
     private const val MAX_API_RESPONSE_BYTES = 128 * 1024 * 1024
 
@@ -49,19 +67,44 @@ internal object OfficialNativeTransport {
         timeoutSeconds: Long,
     ): OfficialHttpResponse {
         val appContext = context.applicationContext
-        verifyOfficialLibraries(appContext)
-        ensureLibrariesLoaded()
+        OfficialNativeEnvironment.unavailableReason()?.let { reason ->
+            throw OfficialNativeUnavailableException(reason)
+        }
+        try {
+            verifyOfficialLibraries(appContext)
+            ensureLibrariesLoaded()
+        } catch (error: OfficialNativeUnavailableException) {
+            throw error
+        } catch (error: Throwable) {
+            // Missing libraries, digest mismatches and failed loads are all
+            // "this device cannot use the official closure" conditions; the
+            // caller must be able to fall back instead of failing the request.
+            throw OfficialNativeUnavailableException(
+                "官方原生传输不可用: " + (error.message ?: error.javaClass.simpleName),
+                error,
+            )
+        }
         val caBundle = ensureCaBundle(appContext)
         val timeout = timeoutSeconds.coerceIn(1L, 300L) * 1000L
-        val envelope = nativePost(
-            path = "/" + path.trimStart('/'),
-            userAgent = userAgent,
-            caBundlePath = caBundle.absolutePath,
-            body = body,
-            connectTimeoutMillis = timeout.coerceAtMost(30_000L).toInt(),
-            requestTimeoutMillis = timeout.toInt(),
-            maximumResponseBytes = MAX_API_RESPONSE_BYTES,
-        )
+        val envelope = try {
+            nativePost(
+                path = "/" + path.trimStart('/'),
+                userAgent = userAgent,
+                caBundlePath = caBundle.absolutePath,
+                body = body,
+                connectTimeoutMillis = timeout.coerceAtMost(30_000L).toInt(),
+                requestTimeoutMillis = timeout.toInt(),
+                maximumResponseBytes = MAX_API_RESPONSE_BYTES,
+            )
+        } catch (error: IOException) {
+            if (isInitializationFailure(error)) {
+                throw OfficialNativeUnavailableException(
+                    "官方原生传输初始化失败: " + error.message.orEmpty(),
+                    error,
+                )
+            }
+            throw error
+        }
         if (envelope.size < 4) throw IOException("native HTTP 响应封装无效")
         val status = ((envelope[0].toInt() and 0xff) shl 24) or
             ((envelope[1].toInt() and 0xff) shl 16) or
@@ -140,6 +183,15 @@ internal object OfficialNativeTransport {
             }
         writer.write("-----END CERTIFICATE-----\n")
     }
+
+    /**
+     * libcurl is loaded lazily inside the JNI layer. This exact message is only
+     * raised when the bundled libcurl could not be opened or initialized (a
+     * local environment failure), never for network errors — those carry
+     * "official libcurl request failed (curl=...)" instead.
+     */
+    private fun isInitializationFailure(error: IOException): Boolean =
+        error.message.orEmpty().contains("official libcurl initialization failed")
 
     private fun sha256(input: InputStream): String {
         val digest = MessageDigest.getInstance("SHA-256")

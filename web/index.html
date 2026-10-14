@@ -1720,6 +1720,14 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
       <details class="auth-advanced">
         <summary>高级设置</summary>
         <div class="auth-field"><input type="text" id="on-ver" value="2.9.366" placeholder=" "><label for="on-ver">协议版本</label></div>
+        <div class="auth-device-title">在线传输方式</div>
+        <div class="auth-field transport-field">
+          <select id="on-transport" aria-label="在线传输方式">
+            <option value="auto" selected>自动（推荐）</option>
+            <option value="okhttp">兼容 OkHttp（模拟器）</option>
+          </select>
+        </div>
+        <div class="auth-device-status" id="on-transport-status" role="status" aria-live="polite">自动：真机使用官方原生传输；模拟器等环境自动改用兼容传输，避免闪退。</div>
         <div class="auth-device-title">在线请求设备参数</div>
         <div class="auth-device-options" role="radiogroup" aria-label="在线请求设备参数">
           <label class="auth-device-option"><input type="radio" name="online-device-mode" value="compat" checked><span class="auth-device-copy"><strong>兼容占位（默认）</strong><small>保持原有请求参数，不读取或发送本机型号。</small></span></label>
@@ -3516,7 +3524,7 @@ async function onStatus(options={}){
       $('#on-hlb').textContent=inf.hlb!=null?inf.hlb:'—';
       $('#on-gift').textContent=inf.gift_hlb!=null?inf.gift_hlb:'—';
     } else { wallet.style.display='none'; }
-    $('#on-ver-txt').innerHTML='account: '+esc(s.account)+' <span class="nw">协议版本 '+esc(s.app_version||'2.9.366')+' · '+esc(s.device_label||'兼容占位')+(s.transport_backend?' · '+esc(s.transport_backend):'')+'</span>';
+    $('#on-ver-txt').innerHTML='account: '+esc(s.account)+' <span class="nw">协议版本 '+esc(s.app_version||'2.9.366')+' · '+esc(s.device_label||'兼容占位')+(s.transport_backend?' · '+esc(s.transport_backend):'')+(s.transport_note?'（'+esc(s.transport_note)+'）':'')+'</span>';
     loadShelf();
     if(shouldAnimate){
       try{
@@ -3582,9 +3590,28 @@ function updateDeviceModeStatus(){
 function authPayload(data){
   const out=Object.assign({},data||{},selectedDeviceContext());
   out.app_version=$('#on-ver').value.trim();
-  if(out.app_version==='2.9.366')out.transport_backend='official_native';
+  // 传输方式交由后端按设备环境选择：真机自动使用官方原生传输，模拟器等无法
+  // 运行官方库的环境自动改用兼容 OkHttp（两者发送的签名字节完全一致）。
+  // 手动选择“兼容 OkHttp”时在此显式指定。
+  const transport=$('#on-transport')?$('#on-transport').value:'auto';
+  if(transport==='okhttp')out.transport_backend='okhttp';
   return out;
 }
+const TRANSPORT_STORAGE_KEY='cwm-online-transport-v1';
+(function(){
+  const select=$('#on-transport');
+  if(!select)return;
+  const status=$('#on-transport-status');
+  const autoHint='自动：真机使用官方原生传输；模拟器等环境自动改用兼容传输，避免闪退。';
+  const fixedHint='已固定使用兼容 OkHttp 传输（与官方原生传输发送相同的签名字节）。';
+  function syncHint(){if(status)status.textContent=select.value==='okhttp'?fixedHint:autoHint;}
+  try{const saved=localStorage.getItem(TRANSPORT_STORAGE_KEY);if(saved==='auto'||saved==='okhttp')select.value=saved;}catch(e){}
+  syncHint();
+  select.addEventListener('change',()=>{
+    try{localStorage.setItem(TRANSPORT_STORAGE_KEY,select.value)}catch(e){}
+    syncHint();
+  });
+})();
 document.querySelectorAll('input[name="online-device-mode"]').forEach(input=>{
   input.addEventListener('change',()=>{
     try{localStorage.setItem(DEVICE_MODE_STORAGE_KEY,selectedDeviceContext().device_mode)}catch(e){}
@@ -4663,6 +4690,9 @@ renderDlLog();
 /* ===== 手机号短信登录：区号选择器（来自 366 主工程）===== */
 #online-loginbox .phone-area-field{display:flex;align-items:center;gap:8px}
 #phone-area{position:relative;z-index:2;flex:0 0 105px;width:105px;min-height:44px;border:0;border-radius:10px;padding:6px;background:var(--card2);color:var(--white);font:inherit;font-size:12px}
+/* ===== 在线传输方式选择器（模拟器兼容）===== */
+#online-loginbox .transport-field{margin:12px 0 0}
+#on-transport{position:relative;z-index:2;width:100%;min-height:44px;border:0;border-radius:12px;padding:8px 10px;background:var(--card2);color:var(--white);font:inherit;font-size:12.5px}
 #online-loginbox #code-name{min-width:0;padding-left:12px!important}
 #online-loginbox #code-name+label{left:125px}
 </style>

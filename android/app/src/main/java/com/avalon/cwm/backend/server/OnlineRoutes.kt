@@ -4,6 +4,8 @@ import com.avalon.cwm.backend.BackendRuntime
 import com.avalon.cwm.backend.core.ChapterSelection
 import com.avalon.cwm.backend.online.CIWEIMAO_APP_VERSION
 import com.avalon.cwm.backend.online.CIWEIMAO_LATEST_VERSION
+import com.avalon.cwm.backend.online.CIWEIMAO_TRANSPORT_OFFICIAL_NATIVE
+import com.avalon.cwm.backend.online.CIWEIMAO_TRANSPORT_OKHTTP
 import com.avalon.cwm.backend.online.AccountLoginSessions
 import com.avalon.cwm.backend.online.PhoneSmsSessions
 import com.avalon.cwm.backend.online.CiweimaoAuth
@@ -18,6 +20,7 @@ import com.avalon.cwm.backend.online.NeedCodeException
 import com.avalon.cwm.backend.online.OnlineAccountRepository
 import com.avalon.cwm.backend.online.OnlineDownloadRequest
 import com.avalon.cwm.backend.online.isUnreviewedChapterMeta
+import com.avalon.cwm.backend.online.latest.OfficialNativeEnvironment
 import com.avalon.cwm.backend.online.stableOnlineError
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONObject
@@ -61,6 +64,7 @@ internal class OnlineRoutes(
         val account = runtime.accounts.load()
         val name = account.optString("account")
         val token = account.optString("login_token")
+        val appVersion = account.optString("app_version").ifBlank { CIWEIMAO_APP_VERSION }
         val device = runtime.accounts.accountDeviceContext(account)
         var loggedIn = name.isNotBlank() && token.isNotBlank()
         var info: Any = JSONObject.NULL
@@ -78,16 +82,31 @@ internal class OnlineRoutes(
                     )
             }
         }
+        val requestedTransport = account.optString("transport_backend")
+            .ifBlank { OnlineAccountRepository.defaultTransport(appVersion) }
+        // The official native closure cannot run on translation hosts (PC
+        // emulators); report the transport that will actually be used, plus a
+        // short reason when it was downgraded, so the account panel can show it.
+        val fallbackNote = if (
+            requestedTransport == CIWEIMAO_TRANSPORT_OFFICIAL_NATIVE &&
+            appVersion == CIWEIMAO_LATEST_VERSION
+        ) {
+            OfficialNativeEnvironment.unavailableReason()
+        } else {
+            null
+        }
         return HttpSupport.json(
             JSONObject()
                 .put("logged_in", loggedIn)
                 .put("account", name)
-                .put(
-                    "app_version",
-                    account.optString("app_version").ifBlank { CIWEIMAO_APP_VERSION },
-                )
+                .put("app_version", appVersion)
                 .put("device_mode", device.mode)
                 .put("device_label", device.label)
+                .put(
+                    "transport_backend",
+                    if (fallbackNote != null) CIWEIMAO_TRANSPORT_OKHTTP else requestedTransport,
+                )
+                .put("transport_note", fallbackNote.orEmpty())
                 .put("info", info),
         )
     }
