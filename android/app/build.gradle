@@ -3,6 +3,21 @@ plugins {
     id "org.jetbrains.kotlin.android"
 }
 
+// 版本号默认值（本地构建/调试用）。发布构建由 CI 从 Git tag 注入：
+//   gradle assembleRelease -PversionCode=20008 -PversionName=2.0.8
+// 见 .github/workflows/release.yml（tag vX.Y.Z → versionCode X*10000+Y*100+Z）。
+// 发版时无需再手动修改本文件。
+def appVersionCode = 24
+def appVersionName = "2.0.7"
+def injectedVersionCode = project.findProperty("versionCode")?.toString()?.trim()
+def injectedVersionName = project.findProperty("versionName")?.toString()?.trim()
+if (injectedVersionCode != null && injectedVersionCode.isInteger()) {
+    appVersionCode = injectedVersionCode.toInteger()
+}
+if (injectedVersionName != null && !injectedVersionName.isEmpty()) {
+    appVersionName = injectedVersionName
+}
+
 android {
     namespace "com.avalon.cwm"
     compileSdk 35
@@ -12,8 +27,8 @@ android {
         applicationId "com.avalon.cwm"
         minSdk 25
         targetSdk 35
-        versionCode 23
-        versionName "2.0.6"
+        versionCode appVersionCode
+        versionName appVersionName
         // 366 official transport wrapper is built for the ABIs whose official
         // libcurl/OpenSSL closure is bundled under src/main/jniLibs/.
         ndk {

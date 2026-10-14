@@ -32,7 +32,22 @@ jobs:
       - name: Build unsigned Release APK
         run: |
           cd android
-          gradle assembleRelease --stacktrace
+          # 版本号从 Git tag 注入：v2.0.8 → versionName=2.0.8、versionCode=20008。
+          # 非 v* 触发（workflow_dispatch）时使用 build.gradle 中的默认值。
+          VERSION_ARGS=""
+          if [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            CLEAN_VERSION="${GITHUB_REF_NAME#v}"
+            if [[ "$CLEAN_VERSION" =~ ^([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]; then
+              PATCH="${BASH_REMATCH[4]:-0}"
+              VERSION_CODE=$(( ${BASH_REMATCH[1]} * 10000 + ${BASH_REMATCH[2]} * 100 + PATCH ))
+              VERSION_ARGS="-PversionCode=${VERSION_CODE} -PversionName=${CLEAN_VERSION}"
+              echo "版本注入: versionCode=${VERSION_CODE}, versionName=${CLEAN_VERSION}"
+            else
+              echo "::error::无法从 tag '${GITHUB_REF_NAME}' 解析版本号（期望 vX.Y.Z）"
+              exit 1
+            fi
+          fi
+          gradle assembleRelease ${VERSION_ARGS} --stacktrace
 
       - name: Decode signing keystore
         shell: bash

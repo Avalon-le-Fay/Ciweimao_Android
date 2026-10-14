@@ -893,9 +893,8 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("允许访问下载与文档目录")
             .setMessage(
-                "此应用需要读取刺猬猫缓存，并把 TXT/EPUB 写入公共存储。" +
-                    "下一页请选择“允许访问所有文件”。\n\n" +
-                    "该权限只适合自行安装的版本；即使授权，Android 仍可能限制其他应用的私有目录。",
+                "读取缓存，并把TXT/EPUB写入公共存储。\n\n" +
+                    "请选择“允许访问所有文件”。",
             )
             .setPositiveButton("前往授权") { _, _ -> openStoragePermissionPage() }
             .setNegativeButton("暂不") { dialog, _ -> dialog.dismiss() }

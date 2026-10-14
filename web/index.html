@@ -484,6 +484,7 @@ input[type=text]:focus{border-color:var(--blue)}
 .ubox .uw{font-size:.9rem}
 .ubox .uw span{color:var(--text)}
 .ubox .uw b{color:var(--white);font-weight:800;font-variant-numeric:tabular-nums;margin-left:4px}
+.ubox .uw .uw-ico{width:1.25em;height:1.25em;vertical-align:-.22em;margin-right:3px}
 .ubox .ufoot{display:flex;gap:8px;margin-top:14px}
 .info{flex:1;min-width:0}
 .info .name{font-size:var(--fs-name);font-weight:600;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1378,12 +1379,10 @@ html[data-runtime="apk-webview"][data-webview-tier="legacy"] .dlpanel{
 }
 html[data-runtime="apk-webview"][data-webview-tier="legacy"] .tabs{
   background:var(--card);
-  background:color-mix(in srgb,var(--card) 94%,transparent);
   box-shadow:0 8px 24px rgba(45,65,92,.11),inset 0 1px 0 rgba(255,255,255,.62);
 }
 html[data-theme="dark"][data-runtime="apk-webview"][data-webview-tier="legacy"] .tabs{
   background:var(--card);
-  background:color-mix(in srgb,var(--card) 94%,transparent);
   box-shadow:0 8px 24px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.09);
 }
 html[data-runtime="apk-webview"][data-webview-tier="legacy"] .card,
@@ -1396,6 +1395,11 @@ html[data-runtime="apk-webview"][data-webview-tier="legacy"] .search-wrap input[
 html[data-runtime="apk-webview"][data-webview-tier="legacy"] .dlpanel{
   background-color:var(--card)!important;
   background-color:color-mix(in srgb,var(--card) 92%,transparent)!important;
+}
+/* 不支持 backdrop-filter 的低版本 WebView / 浏览器：底部导航栏改为与背景一致的实色，避免透出页面内容。 */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .tabs{background:var(--card)}
+  html[data-theme="dark"] .tabs{background:var(--card)}
 }
 html[data-runtime="apk-webview"][data-webview-tier="legacy"] .panel.active,
 html[data-runtime="apk-webview"][data-webview-tier="legacy"] .stagger-item{
@@ -1708,6 +1712,8 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
         <div class="auth-panel-note">使用 <code>app1.happybooker.cn</code>，Token 导入还需要 reader_id；shelf_id 可自动发现。</div>
         <div class="auth-field"><input type="text" id="on-account" placeholder=" " autocomplete="off"><label for="on-account">account（昵称）</label></div>
         <div class="auth-field"><input type="text" id="on-token" placeholder=" " autocomplete="off"><label for="on-token">login_token（32 位）</label></div>
+        <div class="auth-field"><input type="text" id="on-reader-id" placeholder=" " inputmode="numeric" autocomplete="off"><label for="on-reader-id">reader_id（2.9.365 / 2.9.366 必填）</label></div>
+        <div class="auth-field"><input type="text" id="on-shelf-id" placeholder=" " inputmode="numeric" autocomplete="off"><label for="on-shelf-id">shelf_id（可留空自动获取）</label></div>
         <button class="btn btn-primary auth-submit" id="btn-login">使用 Token 登录</button>
       </div>
       <div class="lpanel auth-guest" id="l-guest">
@@ -1746,8 +1752,8 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
           </div>
         </div>
         <div class="uwallet" id="on-wallet">
-          <span class="uw"><span>🍪 猫饼干</span><b id="on-hlb">—</b></span>
-          <span class="uw"><span>🪙 代币</span><b id="on-gift">—</b></span>
+          <span class="uw"><span><img class="uw-ico" src="img/cookie.png" alt="">猫饼干</span><b id="on-hlb">—</b></span>
+          <span class="uw"><span><img class="uw-ico" src="img/coin.png" alt="">代币</span><b id="on-gift">—</b></span>
         </div>
         <div class="ufoot">
           <button class="btn btn-ghost btn-sm" id="btn-shelf" data-ic="refresh">刷新书架</button>
@@ -3622,11 +3628,14 @@ updateDeviceModeStatus();
 $('#btn-login').onclick=async()=>{
   const account=$('#on-account').value.trim();
   const token=$('#on-token').value.trim();
+  const reader_id=$('#on-reader-id').value.trim();
+  const shelf_id=$('#on-shelf-id').value.trim();
   const ver=$('#on-ver').value.trim();
   if(!account||!token){ toast('请填 account 和 login_token'); return; }
+  if(['2.9.365','2.9.366'].includes(ver)&&!reader_id){ toast('2.9.365 / 2.9.366 Token 登录还需要 reader_id'); return; }
   const b=$('#btn-login'); b.disabled=true; b.textContent='登录中...';
   try{
-    const r=await authApi('/api/online/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(authPayload({account,login_token:token}))});
+    const r=await authApi('/api/online/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(authPayload({account,login_token:token,reader_id,shelf_id}))});
     if(r.ok){ toast('登录成功: '+(r.info&&r.info.reader_name||account)); await onStatus({loginSuccess:true}); }
     else toast('登录失败: '+r.error);
   }catch(error){
