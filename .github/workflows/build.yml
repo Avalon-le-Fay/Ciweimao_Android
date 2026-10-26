@@ -31,6 +31,21 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: 检查 web/index.html 没有样式泄漏
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          html = open('web/index.html', encoding='utf-8').read()
+          body = re.sub(r'<style[\s\S]*?</style>', '', html)
+          body = re.sub(r'<script[\s\S]*?</script>', '', body)
+          markers = ['{--tb-ok', '.cwm-check{', '.chapter-row{', '#cover-viewer{', '.chapter-modal{']
+          hit = [m for m in markers if m in body]
+          if hit:
+              print('ERROR: CSS 泄漏到正文，检查是否漏了 <style> 标签:', hit)
+              sys.exit(1)
+          print('web/index.html OK')
+          PY
+
       - name: Build Debug APK
         run: |
           cd android
