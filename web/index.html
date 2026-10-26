@@ -2600,46 +2600,18 @@ async function switchMainTab(tab){
   if(_tabSwitching) return;
   _tabSwitching=true;
   if(_tabRepeatAnim){ try{_tabRepeatAnim.cancel()}catch(e){} _tabRepeatAnim=null; }
-  const tabs=[...document.querySelectorAll('.tab')];
-  const direction=tabs.indexOf(tab)>tabs.indexOf(oldTab)?1:-1;
   const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const oldHeight=oldPanel.getBoundingClientRect().height;
-  newPanel.classList.add('tab-transitioning');
-  _panelStage.classList.add('tab-animating');
-  _panelStage.style.height=oldHeight+'px';
-  newPanel.style.visibility='hidden';
-  const newHeight=newPanel.getBoundingClientRect().height;
-  newPanel.style.visibility='visible';
-  oldPanel.style.zIndex='1';newPanel.style.zIndex='2';
   oldTab.classList.remove('active');tab.classList.add('active');moveInd(tab);if(typeof window.playMenuTabEffect==='function')window.playMenuTabEffect(tab,false);
-  const inFrames=reduce
-    ? [{opacity:0},{opacity:1}]
-    : [{opacity:0,transform:'translateX('+(direction*16)+'px)'},{opacity:1,transform:'translateX(0)'}];
-  // 只动新页面：旧页面静止垫在下面。两页同时动 = 每帧合成两张全页图层。
-  const inAnim=newPanel.animate(inFrames,{duration:reduce?110:200,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  const heightAnim=_panelStage.animate([{height:oldHeight+'px'},{height:newHeight+'px'}],{duration:reduce?110:200,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  await waitAllSettled([inAnim.finished,heightAnim.finished]);
+  // 瞬时换页 + 新页轻微落位：旧页立刻隐藏（两页同时半透明会叠出重影），
+  // 只动新页一层，也不做整页高度动画。
   oldPanel.classList.remove('active');
   newPanel.classList.add('active');
-  oldPanel.classList.remove('tab-transitioning');newPanel.classList.remove('tab-transitioning');
-  [oldPanel,newPanel].forEach(panel=>{
-    panel.style.removeProperty('visibility');
-    panel.style.removeProperty('z-index');
-  });
-  // 先恢复新页的正常文档流，但暂时保留舞台固定高度；再读取真实最终高度。
-  _panelStage.classList.remove('tab-animating');
-  [inAnim,heightAnim].forEach(a=>{try{a.cancel()}catch(e){}});
-  _panelStage.style.height=newHeight+'px';
-  const finalHeight=newPanel.getBoundingClientRect().height;
-  if(Math.abs(finalHeight-newHeight)>.5){
-    const correction=_panelStage.animate(
-      [{height:newHeight+'px'},{height:finalHeight+'px'}],
-      {duration:reduce?0:120,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'}
+  if(!reduce&&newPanel.animate){
+    newPanel.animate(
+      [{opacity:.9,transform:'translateY(10px)'},{opacity:1,transform:'translateY(0)'}],
+      {duration:200,easing:'cubic-bezier(.22,1,.36,1)'}
     );
-    try{await correction.finished}catch(e){}
-    try{correction.cancel()}catch(e){}
   }
-  _panelStage.style.height='';
   _tabSwitching=false;
   if(typeof updateOutFloat==='function') updateOutFloat();
   if(typeof updateFloat==='function') updateFloat();
