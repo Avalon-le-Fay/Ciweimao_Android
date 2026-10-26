@@ -797,12 +797,13 @@ html[data-theme="dark"] .cfm-box{background:rgba(28,28,32,0.9)}
 /* 图标被砸中的回弹 */
 #dl-fab.hit{animation:fabHit .5s cubic-bezier(.34,1.56,.64,1)}
 @keyframes fabHit{0%{transform:translateY(0) scale(1)}35%{transform:translateY(0) scale(1.22)}100%{transform:translateY(0) scale(1)}}
-@media (prefers-reduced-motion:reduce){ .dl-fly{display:none} #dl-fab.hit{animation:none} #dl-fab.show.scroll-hidden{transition:none} }
+@media (prefers-reduced-motion:reduce){ .dl-fly{display:none} #dl-fab.hit{animation:none} #dl-fab.scroll-hidden{transition:none} }
 
 /* 下载图标随浮动条隐藏 */
 #dl-fab.hide{display:none!important}
-/* 滚动时向右滑出隐藏（特效参数复刻 #dn.scroll-hidden）*/
-#dl-fab.show.scroll-hidden{
+/* 滚动时向右滑出隐藏（特效参数复刻 #dn.scroll-hidden）
+   注意：320 的 #dl-fab 一直可见、没有 .show 类，选择器不能带 .show */
+#dl-fab.scroll-hidden{
   transform:translateX(140%) scale(.72);
   opacity:0; pointer-events:none;
   transition:transform .62s cubic-bezier(.34,1.56,.64,1),opacity .42s ease;
@@ -1578,6 +1579,23 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
   top: -25px;
   bottom: -25px;
   left: -35px; 
+  right: -10px;
+}
+
+/* ===== 下载悬浮按钮：与 #dn 同一套边缘交互 ===== */
+#dl-fab {
+  touch-action: pan-y !important;
+}
+#dl-fab.swipe-hide {
+  transform: translateX(calc(100% + 6px + var(--safe-right))) !important;
+  opacity: 0.6 !important;
+}
+#dl-fab::before {
+  content: '';
+  position: absolute;
+  top: -25px;
+  bottom: -25px;
+  left: -35px;
   right: -10px;
 }
 
@@ -5262,87 +5280,73 @@ renderDlLog();
 </script>
 
 <script>
-// ===== 昼夜切换按钮：右滑贴边与左滑/点击恢复逻辑 =====
+// ===== 悬浮按钮：右滑贴边隐藏、左滑/点边缘恢复（#dn 与 #dl-fab 共用） =====
 (function(){
-  var dn = document.getElementById('dn');
-  if(!dn) return;
+  function installEdgeSwipe(el){
+    if(!el) return;
 
-  var startX = 0;
-  var isDragging = false;
-  var hasMoved = false;
-  var suppressClickUntil = 0; // 核心：防误触锁，阻止滑动后的“幽灵点击”
+    var startX = 0;
+    var isDragging = false;
+    var hasMoved = false;
+    var suppressClickUntil = 0; // 防误触锁：滑动结束后 400ms 内的点击不算点击
 
-  // 1. 手指按下
-  dn.addEventListener('touchstart', function(e) {
-    startX = e.touches[0].clientX;
-    isDragging = true;
-    hasMoved = false;
-    dn.style.transition = 'none'; // 拖拽时禁用过渡，确保纯跟手
-  }, {passive: true});
+    el.addEventListener('touchstart', function(e) {
+      startX = e.touches[0].clientX;
+      isDragging = true;
+      hasMoved = false;
+      el.style.transition = 'none'; // 拖拽时禁用过渡，确保纯跟手
+    }, {passive: true});
 
-  // 2. 手指拖拽
-  dn.addEventListener('touchmove', function(e) {
-    if(!isDragging) return;
-    var diffX = e.touches[0].clientX - startX;
-    
-    if(Math.abs(diffX) > 4) {
-      hasMoved = true;
-    }
-
-    if(!dn.classList.contains('swipe-hide')) {
-      // 正常显示态：只允许向右拖动跟手
-      if(diffX > 0) {
-        dn.style.transform = 'translateX(' + diffX + 'px)';
+    el.addEventListener('touchmove', function(e) {
+      if(!isDragging) return;
+      var diffX = e.touches[0].clientX - startX;
+      if(Math.abs(diffX) > 4) hasMoved = true;
+      if(!el.classList.contains('swipe-hide')){
+        // 正常显示态：只允许向右拖动跟手
+        if(diffX > 0) el.style.transform = 'translateX(' + diffX + 'px)';
+      }else if(diffX < 0){
+        // 贴边隐藏态：向左拉时实时跟手拉出来
+        el.style.setProperty('transform', 'translateX(calc(100% + 6px + var(--safe-right) + ' + diffX + 'px))', 'important');
       }
-    } else {
-      // 贴边隐藏态：向左拉时实时跟手拉出来
-      if(diffX < 0) {
-        dn.style.setProperty('transform', 'translateX(calc(100% + 6px + var(--safe-right) + ' + diffX + 'px))', 'important');
+    }, {passive: true});
+
+    el.addEventListener('touchend', function(e) {
+      if(!isDragging) return;
+      isDragging = false;
+      el.style.transition = '';
+      el.style.removeProperty('transform');
+      var diffX = e.changedTouches[0].clientX - startX;
+      if(hasMoved){
+        if(!el.classList.contains('swipe-hide') && diffX > 15){
+          el.classList.add('swipe-hide');
+          suppressClickUntil = Date.now() + 400;
+        }else if(el.classList.contains('swipe-hide') && diffX < -10){
+          el.classList.remove('swipe-hide');
+          suppressClickUntil = Date.now() + 400;
+        }
       }
-    }
-  }, {passive: true});
+    }, {passive: true});
 
-  // 3. 手指松开
-  dn.addEventListener('touchend', function(e) {
-    if(!isDragging) return;
-    isDragging = false;
-    
-    dn.style.transition = ''; 
-    dn.style.removeProperty('transform');
-
-    var diffX = e.changedTouches[0].clientX - startX;
-
-    if(hasMoved) {
-      if(!dn.classList.contains('swipe-hide') && diffX > 15) {
-        // 【向右滑出】：隐藏，并锁定 400ms 忽略接下来的幽灵点击
-        dn.classList.add('swipe-hide');
-        suppressClickUntil = Date.now() + 400;
-      } else if(dn.classList.contains('swipe-hide') && diffX < -10) {
-        // 【向左拉出】：显示，并锁定 400ms 防止误触昼夜切换
-        dn.classList.remove('swipe-hide');
-        suppressClickUntil = Date.now() + 400;
+    el.addEventListener('click', function(e) {
+      // 滑动带出来的伴随点击直接抹杀，避免滑一下就把面板打开 / 切主题
+      if(Date.now() < suppressClickUntil){
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
       }
-    }
-  }, {passive: true});
+      // 点到隐藏后露出的边缘：只唤醒，不执行按钮本身的动作
+      if(el.classList.contains('swipe-hide')){
+        el.classList.remove('swipe-hide');
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    }, true);
+  }
 
-  // 4. 点击事件
-  dn.addEventListener('click', function(e) {
-    // 关键防线1：如果是刚刚滑动产生的伴随点击，直接抹杀
-    if(Date.now() < suppressClickUntil) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      return;
-    }
-
-    // 关键防线2：如果是正常点击被隐藏的边缘，只唤醒弹出，绝不触发变色
-    if(dn.classList.contains('swipe-hide')) {
-      dn.classList.remove('swipe-hide');
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    }
-  }, true);
+  installEdgeSwipe(document.getElementById('dn'));
+  installEdgeSwipe(document.getElementById('dl-fab'));
 })();
 </script>
 
