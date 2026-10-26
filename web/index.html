@@ -1967,7 +1967,7 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
     <div class="chapter-list" id="chap-list"><div class="empty">正在加载…</div></div>
     <div class="chapter-footer">
       <div class="chapter-total"><span>应付 <strong id="chap-selected-cost">0 币</strong></span><span>需购 <strong id="chap-purchase-count">0 章</strong></span><span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span><small>已选 <strong id="chap-selected-count">0</strong> 章</small></div>
-      <div class="chapter-afford is-idle" id="chap-afford" role="status" aria-live="polite">选择章节后这里会显示能不能买得起</div>
+      <div class="chapter-afford is-idle" id="chap-afford" role="status" aria-live="polite">选择章节后这里会显示未购买章节的数量</div>
       <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button><button type="button" class="btn btn-primary btn-sm" id="chap-modal-ok" disabled>开始下载</button></div>
     </div>
   </section>
@@ -4099,7 +4099,7 @@ function openChapModal(bid,name){
   $('#chap-list').innerHTML='<div class="empty">正在加载…</div>';
   $('#chap-summary').textContent='正在读取目录与价格…';
   const afford=$('#chap-afford');
-  if(afford){afford.className='chapter-afford is-idle';afford.textContent='选择章节后这里会显示能不能买得起';}
+  if(afford){afford.className='chapter-afford is-idle';afford.textContent='选择章节后这里会显示未购买章节的数量';}
   $('#chap-selected-count').textContent='0';
   $('#chap-purchase-count').textContent='0 章';
   $('#chap-selected-cost').textContent='0 币';
@@ -4186,15 +4186,10 @@ function renderChapterSelection(data){
     const box=$('#chap-afford'); if(!box)return;
     const balance=amountOf(data.balance);
     if(availableBalance)availableBalance.textContent=balance==null?'—':chapMoney(balance)+' 币';
-    if(!purchase){box.className='chapter-afford is-idle';box.textContent='所选章节都已拥有或免费，无需购章';return;}
-    if(balance==null){box.className='chapter-afford is-unknown';box.textContent='余额未知，无法判断能不能买齐';return;}
-    if(balance>=amount){
-      box.className='chapter-afford is-ok';
-      box.innerHTML='余额够 <span class="afford-detail">应付 '+chapMoney(amount)+' 币，余额 '+chapMoney(balance)+' 币'+(balance-amount>0?'，结余 '+chapMoney(balance-amount)+' 币':'，刚好够')+'</span>';
-    }else{
-      box.className='chapter-afford is-short';
-      box.innerHTML='余额不足 <span class="afford-detail">应付 '+chapMoney(amount)+' 币，余额 '+chapMoney(balance)+' 币，还差 '+chapMoney(amount-balance)+' 币</span>';
-    }
+    if(!purchase){box.className='chapter-afford is-idle';box.textContent='所选章节都已拥有或免费';return;}
+    // 320 不会自动购章：这里只提示未购买章节下不了，不做「买得起/买不起」的判断。
+    box.className='chapter-afford is-unknown';
+    box.innerHTML='其中 '+purchase+' 章未购买 <span class="afford-detail">这些章节下载会失败；本应用不会自动购章</span>';
   }
   function update(){
     const checked=Array.prototype.slice.call(list.querySelectorAll('input[data-chapter-seq]:checked')); let amount=0;
@@ -4205,7 +4200,7 @@ function renderChapterSelection(data){
     purchaseCount.textContent=String(purchase)+' 章';
     selectedCost.textContent=chapMoney(amount)+' 币';
     downloadButton.disabled=checked.length===0;
-    downloadButton.textContent=amount>0?'订阅并下载':'开始下载';
+    downloadButton.textContent='开始下载';
     renderAfford(amount,purchase);
     list.querySelectorAll('input[data-group-check]').forEach(function(box){const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-parent="'+box.dataset.groupCheck+'"]'));box.checked=rows.length>0&&rows.every(function(row){return row.checked;});box.indeterminate=rows.some(function(row){return row.checked;})&&!box.checked;});
     list.querySelectorAll('input[data-division-check]').forEach(function(box){const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-division="'+box.dataset.divisionCheck+'"]'));box.checked=rows.length>0&&rows.every(function(row){return row.checked;});box.indeterminate=rows.some(function(row){return row.checked;})&&!box.checked;});
