@@ -1182,12 +1182,9 @@ html[data-theme="dark"] .export-option:hover,html[data-theme="dark"] .export-opt
 .panel-stage.tab-animating .panel.tab-transitioning{
   position:absolute;inset-block-start:0;inset-inline:0;width:100%;margin:0;
   display:block;
-  will-change:transform,opacity;
 }
-@media(prefers-reduced-motion:reduce){
-  .panel-stage.tab-animating .panel.active,
-  .panel-stage.tab-animating .panel.tab-transitioning{will-change:opacity}
-}
+/* 这里刻意不写 will-change：面板很高（3000px+），提升成合成层会超过 GPU 4096px
+   纹理上限、被迫切片光栅化，实测比不提升慢一倍。 */
 
 
 /* 在线下载：登录面板与已登录用户面板不显示外层阴影。 */
@@ -2615,16 +2612,13 @@ async function switchMainTab(tab){
   newPanel.style.visibility='visible';
   oldPanel.style.zIndex='1';newPanel.style.zIndex='2';
   oldTab.classList.remove('active');tab.classList.add('active');moveInd(tab);if(typeof window.playMenuTabEffect==='function')window.playMenuTabEffect(tab,false);
-  const outFrames=reduce
-    ? [{opacity:1},{opacity:0}]
-    : [{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX('+(-direction*18)+'px)'}];
   const inFrames=reduce
     ? [{opacity:0},{opacity:1}]
-    : [{opacity:0,transform:'translateX('+(direction*24)+'px)'},{opacity:1,transform:'translateX(0)'}];
-  const outAnim=oldPanel.animate(outFrames,{duration:reduce?90:170,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  const inAnim=newPanel.animate(inFrames,{duration:reduce?110:240,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  const heightAnim=_panelStage.animate([{height:oldHeight+'px'},{height:newHeight+'px'}],{duration:reduce?110:240,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  await waitAllSettled([outAnim.finished,inAnim.finished,heightAnim.finished]);
+    : [{opacity:0,transform:'translateX('+(direction*16)+'px)'},{opacity:1,transform:'translateX(0)'}];
+  // 只动新页面：旧页面静止垫在下面。两页同时动 = 每帧合成两张全页图层。
+  const inAnim=newPanel.animate(inFrames,{duration:reduce?110:200,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
+  const heightAnim=_panelStage.animate([{height:oldHeight+'px'},{height:newHeight+'px'}],{duration:reduce?110:200,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
+  await waitAllSettled([inAnim.finished,heightAnim.finished]);
   oldPanel.classList.remove('active');
   newPanel.classList.add('active');
   oldPanel.classList.remove('tab-transitioning');newPanel.classList.remove('tab-transitioning');
@@ -2634,7 +2628,7 @@ async function switchMainTab(tab){
   });
   // 先恢复新页的正常文档流，但暂时保留舞台固定高度；再读取真实最终高度。
   _panelStage.classList.remove('tab-animating');
-  [outAnim,inAnim,heightAnim].forEach(a=>{try{a.cancel()}catch(e){}});
+  [inAnim,heightAnim].forEach(a=>{try{a.cancel()}catch(e){}});
   _panelStage.style.height=newHeight+'px';
   const finalHeight=newPanel.getBoundingClientRect().height;
   if(Math.abs(finalHeight-newHeight)>.5){
