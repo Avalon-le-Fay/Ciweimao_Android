@@ -547,7 +547,7 @@ html[data-theme="dark"] #dn{ --theme-switch-icon-color:#0883ee; }  /* 暗色态�
   padding:12px 14px;margin-bottom:10px;text-decoration:none;color:var(--white);
 }
 .dl-row .ic{width:20px;height:20px;transform:translateY(-2px)}
-.dl-row .fn{flex:1;min-width:0;font-size:14px;white-space:normal;word-break:break-all;line-height:1.4}
+.dl-row .fn{flex:1;min-width:0;font-size:14px;white-space:normal;word-break:normal;overflow-wrap:anywhere;line-height:1.4}
 .dl-row .sz{font-size:12px;color:var(--gray)}
 .spin{animation:sp 1s linear infinite;display:inline-block}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -2623,9 +2623,8 @@ async function switchMainTab(tab){
     : [{opacity:0,transform:'translateX('+(direction*24)+'px)'},{opacity:1,transform:'translateX(0)'}];
   const outAnim=oldPanel.animate(outFrames,{duration:reduce?90:170,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
   const inAnim=newPanel.animate(inFrames,{duration:reduce?110:240,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  // 高度直接跳到新值：动画 height 会让整页每帧重排
-  _panelStage.style.height=newHeight+'px';
-  await waitAllSettled([outAnim.finished,inAnim.finished]);
+  const heightAnim=_panelStage.animate([{height:oldHeight+'px'},{height:newHeight+'px'}],{duration:reduce?110:240,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
+  await waitAllSettled([outAnim.finished,inAnim.finished,heightAnim.finished]);
   oldPanel.classList.remove('active');
   newPanel.classList.add('active');
   oldPanel.classList.remove('tab-transitioning');newPanel.classList.remove('tab-transitioning');
@@ -2635,7 +2634,7 @@ async function switchMainTab(tab){
   });
   // 先恢复新页的正常文档流，但暂时保留舞台固定高度；再读取真实最终高度。
   _panelStage.classList.remove('tab-animating');
-  [outAnim,inAnim].forEach(a=>{try{a.cancel()}catch(e){}});
+  [outAnim,inAnim,heightAnim].forEach(a=>{try{a.cancel()}catch(e){}});
   _panelStage.style.height=newHeight+'px';
   const finalHeight=newPanel.getBoundingClientRect().height;
   if(Math.abs(finalHeight-newHeight)>.5){
