@@ -1957,7 +1957,7 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
   <button class="btn btn-primary" id="btn-go" tabindex="-1">开始解密</button>
 </div>
 
-<div class="modal-mask" id="chap-modal" aria-hidden="true">
+<div class="modal-mask" id="chap-modal" aria-hidden="true" inert>
   <section class="modal chapter-modal" role="dialog" aria-modal="true">
     <div class="modal-heading">
       <div><span class="modal-eyebrow">下载范围</span><h3 id="chap-modal-title">指定章节下载</h3></div>
@@ -1974,7 +1974,7 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
         <span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span>
         <small>已选 <strong id="chap-selected-count">0</strong> 章</small>
       </div>
-      <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button><button type="button" class="btn btn-primary btn-sm" id="chap-modal-ok">开始下载</button></div>
+      <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button><button type="button" class="btn btn-primary btn-sm" id="chap-modal-ok" disabled>开始下载</button></div>
     </div>
   </section>
 </div>
@@ -4095,12 +4095,13 @@ function openChapModal(bid,name){
   $('#chap-purchase-count').textContent='0 章';
   $('#chap-selected-count').textContent='0';
   $('#chap-available-balance').textContent='—';
+  m.inert=false;
   m.classList.add('show');m.setAttribute('aria-hidden','false');
   loadChapterTree(bid);
 }
 function closeChapModal(){
   const m=$('#chap-modal'); if(!m)return;
-  m.classList.remove('show');m.setAttribute('aria-hidden','true');
+  m.classList.remove('show');m.setAttribute('aria-hidden','true');m.inert=true;
   _chapModalBid=null;_chapData=null;
 }
 async function loadChapterTree(bid){
@@ -4117,6 +4118,25 @@ async function loadChapterTree(bid){
     $('#chap-summary').textContent='目录读取失败';
   }
 }
+function cwmCheckMarkup(shape){
+  var square=shape==='square';
+  var ring=square
+    ?'<rect class="cwm-check-ring" x="3" y="3" width="46" height="46" rx="10" fill="none"/>'
+    :'<circle class="cwm-check-ring" cx="26" cy="26" r="23" fill="none"/>';
+  return '<svg class="cwm-check '+(square?'is-square':'is-round')+'" viewBox="0 0 52 52" aria-hidden="true">'
+    +ring
+    +'<path class="cwm-check-mark" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>'
+    +'<path class="cwm-check-dash" fill="none" d="M16 26h20"/>'
+    +'</svg>';
+}
+function costText(chapters){
+  var sum=0;
+  (chapters||[]).forEach(function(ch){
+    if(ch.owned||ch.pending||ch.unit_hlb==null)return;
+    var v=Number(ch.unit_hlb); if(v>0)sum+=v;
+  });
+  return sum>0?(sum.toLocaleString('zh-CN',{maximumFractionDigits:2})+' 币'):'免费';
+}
 function renderChapterTree(data){
   const list=$('#chap-list');
   const divisions=data.divisions||[];
@@ -4128,9 +4148,9 @@ function renderChapterTree(data){
     html+='<div class="chapter-level division-level" data-open="true">'
       +'<div class="chapter-head division-head">'
       +'<button type="button" class="chapter-caret" aria-label="展开或收起" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>'
-      +'<span class="chapter-check"><input type="checkbox" data-vol="'+vi+'"></span>'
+      +'<label class="chapter-check"><input type="checkbox" data-vol="'+vi+'">'+cwmCheckMarkup('round')+'</label>'
       +'<span class="chapter-head-title">'+esc(vname)+'</span>'
-      +'<span class="chapter-head-total">'+chapters.length+' 章</span></div>'
+      +'<span class="chapter-head-total">'+costText(chapters)+'</span></div>'
       +'<div class="chapter-children"><div>';
     for(let offset=0;offset<chapters.length;offset+=10){
       const group=chapters.slice(offset,offset+10);
@@ -4138,8 +4158,9 @@ function renderChapterTree(data){
       html+='<div class="chapter-level group-level" data-open="false">'
         +'<div class="chapter-head group-head">'
         +'<button type="button" class="chapter-caret" aria-label="展开或收起" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>'
-        +'<span class="chapter-check"><input type="checkbox" data-group="'+vi+'-'+offset+'"></span>'
-        +'<span class="chapter-head-title">第 '+start+'-'+(start+group.length-1)+' 章</span></div>'
+        +'<label class="chapter-check"><input type="checkbox" data-group="'+vi+'-'+offset+'">'+cwmCheckMarkup('round')+'</label>'
+        +'<span class="chapter-head-title">第 '+start+'-'+(start+group.length-1)+' 章</span>'
+        +'<span class="chapter-head-total">'+costText(group)+'</span></div>'
         +'<div class="chapter-children"><div>';
       group.forEach(function(ch){
         index+=1;
@@ -4148,6 +4169,7 @@ function renderChapterTree(data){
         const cls='chapter-row'+(owned?' is-owned':'')+(pending?' is-unreviewed':'');
         const priceText=pending?'未审核':(owned?'已购':((price&&price>0)?(price+' 币'):'免费'));
         html+='<label class="'+cls+'"><input type="checkbox" data-id="'+esc(ch.chapter_id||'')+'" data-price="'+(price==null?'':price)+'" data-owned="'+(owned?'1':'0')+'" data-pending="'+(pending?'1':'0')+'">'
+          +cwmCheckMarkup('square')
           +'<span class="chapter-title">'+esc(ch.chapter_title||('第 '+index+' 章'))+'</span>'
           +'<span class="chapter-price">'+esc(priceText)+'</span></label>';
       });
@@ -4206,6 +4228,11 @@ function updateChapSummary(){
   $('#chap-purchase-count').textContent=need+' 章';
   const bal=_chapData&&_chapData.balance!=null?Number(_chapData.balance):null;
   $('#chap-available-balance').textContent=bal==null?'—':money(bal)+' 币';
+  const okBtn=$('#chap-modal-ok');
+  if(okBtn){okBtn.disabled=boxes.length===0;okBtn.textContent=cost>0?'订阅并下载':'开始下载';}
+  const all=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]'));
+  const allBtn=$('#chap-select-all');
+  if(allBtn)allBtn.textContent=(all.length>0&&all.every(function(b){return b.checked;}))?'取消全选':'全选';
   if(_chapData){
     $('#chap-summary').textContent='共 '+_chapData.total+' 章 · 已购 '+_chapData.owned+' · 免费 '+_chapData.free+' · 需购 '+_chapData.pending+' · 未审核 '+_chapData.unreviewed;
   }
@@ -4946,6 +4973,7 @@ html[data-theme="dark"] #accent-picker-open{background:transparent;border-color:
     if(dash)dash.hidden=true;
   }
   if(btn)btn.addEventListener('click',check);
+  window.cwmCheckUpdate=check;
 
   // 标题 = 当前页签
   function syncSection(){
@@ -5001,7 +5029,7 @@ img.cover{cursor:zoom-in}
 
 
 </style>
-<div id="cover-viewer" aria-hidden="true">
+<div id="cover-viewer" aria-hidden="true" inert>
   <img id="cover-viewer-img" alt="">
   <button class="cover-viewer-dl" id="cover-viewer-dl" type="button" aria-label="下载封面" title="下载封面"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>
   <button class="cover-viewer-close" id="cover-viewer-close" type="button" aria-label="关闭">×</button>
@@ -5018,11 +5046,12 @@ img.cover{cursor:zoom-in}
     if(!src)return;
     currentName=name?String(name):'';
     img.src=src;img.alt=currentName;
+    box.inert=false;
     box.classList.add('show');box.setAttribute('aria-hidden','false');
   }
   function close(){
     if(!box.classList.contains('show'))return;
-    box.classList.remove('show');box.setAttribute('aria-hidden','true');
+    box.classList.remove('show');box.setAttribute('aria-hidden','true');box.inert=true;
     setTimeout(function(){if(!box.classList.contains('show'))img.removeAttribute('src');},240);
   }
   function download(){
@@ -5098,5 +5127,47 @@ img.cover{cursor:zoom-in}
 @media (prefers-reduced-motion:reduce){.chapter-children,.chapter-caret{transition:none}}
 
 </style>
+
+<script>
+/* ===== 返回键：先关最上层浮层，再让 App 弹退出确认 ===== */
+window.cwmDismissTopOverlay=function(){
+  try{
+    var cover=document.getElementById('cover-viewer');
+    if(cover&&cover.classList.contains('show')&&typeof window.closeCoverViewer==='function'){window.closeCoverViewer();return true;}
+    var cfm=document.getElementById('cfm-mask');
+    if(cfm&&cfm.classList.contains('show')){var c=document.getElementById('cfm-cancel');if(c){c.click();return true;}}
+    var accent=document.getElementById('accent-picker-overlay');
+    if(accent&&accent.classList.contains('open')){var a=document.getElementById('accent-picker-close');if(a){a.click();return true;}}
+    var sheet=document.getElementById('dl-sheet');
+    if(sheet&&sheet.classList.contains('show')){var d=document.getElementById('dl-sheet-close');if(d){d.click();return true;}}
+    var chap=document.getElementById('chap-modal');
+    if(chap&&chap.classList.contains('show')&&typeof window.closeChapModal==='function'){window.closeChapModal();return true;}
+  }catch(e){}
+  return false;
+};
+</script>
+
+
+/* 勾选组件：圆形=分卷/章节组，方形=单章 */
+.chapter-check{position:relative}
+.chapter-check input,.chapter-row>input[type=checkbox]{position:absolute;width:1px;height:1px;margin:0;opacity:0;pointer-events:none}
+.cwm-check{width:24px;height:24px;flex:0 0 24px;display:block;border-radius:50%;
+  background:color-mix(in oklch,var(--text) 6%,transparent);
+  box-shadow:inset 0 0 0 1.5px color-mix(in oklch,var(--text) 30%,transparent);
+  transition:background .18s ease,box-shadow .18s ease}
+.cwm-check.is-square{border-radius:7px}
+.cwm-check .cwm-check-mark{stroke:var(--accent-fg,#fff);stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .22s var(--ease-out)}
+.cwm-check .cwm-check-dash{stroke:var(--accent-fg,#fff);stroke-width:3.4;stroke-linecap:round;
+  stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .18s ease}
+input:checked~.cwm-check{background:var(--blue);box-shadow:none}
+input:checked~.cwm-check .cwm-check-mark{stroke-dashoffset:0;transition-delay:.08s}
+input:indeterminate~.cwm-check{background:var(--blue);box-shadow:none}
+input:indeterminate~.cwm-check .cwm-check-dash{stroke-dashoffset:0;transition-delay:.08s}
+input:focus-visible~.cwm-check{outline:2px solid var(--blue);outline-offset:3px}
+.chapter-row{position:relative}
+.chapter-row .cwm-check{width:18px;height:18px;flex:0 0 18px;margin-right:2px}
+@media (prefers-reduced-motion:reduce){.cwm-check,.cwm-check .cwm-check-mark,.cwm-check .cwm-check-dash{transition:none!important}}
+
 </body>
 </html>

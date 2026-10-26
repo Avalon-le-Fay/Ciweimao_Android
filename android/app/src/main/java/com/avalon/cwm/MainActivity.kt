@@ -543,8 +543,9 @@ class MainActivity : AppCompatActivity() {
                     )
                     return@runOnUiThread
                 }
+                val fileName = coverFileName(baseName, url)
                 requestNativeDownload(
-                    PendingNativeDownload(url = url, filename = coverFileName(baseName, url)),
+                    PendingNativeDownload(url = url, filename = fileName, mimeType = coverMimeType(fileName)),
                 )
             }
         }
@@ -671,7 +672,16 @@ class MainActivity : AppCompatActivity() {
             val ext = (Uri.parse(target).path ?: "").substringAfterLast('.', "").lowercase()
             if (ext in setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")) ".$ext" else ""
         }.getOrDefault("")
-        return clean + extension
+        // 没有扩展名时按最常见的情况补 .jpg，避免 SAF 创建出无类型文件
+        return clean + extension.ifBlank { ".jpg" }
+    }
+
+    private fun coverMimeType(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        "gif" -> "image/gif"
+        "bmp" -> "image/bmp"
+        else -> "image/jpeg"
     }
 
     private fun requestNativeDownload(request: PendingNativeDownload) {
