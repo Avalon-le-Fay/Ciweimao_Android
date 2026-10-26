@@ -1931,6 +1931,7 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
         <div class="ltab" data-f="epub">EPUB</div>
       </div>
     </div>
+    <div id="out-sticky-sentinel" aria-hidden="true"></div>
     <div id="out-floatbar-slot" aria-hidden="true" inert>
       <div class="out-floatbar-clip">
         <div class="floatbar" id="out-floatbar">
@@ -2115,6 +2116,20 @@ function toast(msg){
 
 // ===== 主标签页面：方向滑动（旧页退出 + 新页进入） =====
 const _panelStage=document.getElementById('panel-stage');
+(function wireOutSticky(){
+  var ticking=false;
+  function update(){syncOutSticky();ticking=false;}
+  window.addEventListener('scroll',function(){if(!ticking){requestAnimationFrame(update);ticking=true;}},{passive:true});
+  window.addEventListener('resize',function(){measureOutStickyTop();syncOutSticky();},{passive:true});
+  window.addEventListener('cwm:insets',function(){measureOutStickyTop();syncOutSticky();});
+  window.addEventListener('load',function(){measureOutStickyTop();syncOutSticky();});
+  requestAnimationFrame(function(){measureOutStickyTop();syncOutSticky();});
+  var titlebar=document.querySelector('.titlebar');
+  if(titlebar&&'ResizeObserver' in window){
+    var ro=new ResizeObserver(function(){measureOutStickyTop();syncOutSticky();});
+    try{ro.observe(titlebar,{box:'border-box'});}catch(e){ro.observe(titlebar);}
+  }
+})();
 let _tabSwitching=false;
 let _tabRepeatAnim=null;
 function repeatActivePanel(panel){
@@ -2471,6 +2486,13 @@ libList.onclick=function(e){
 let allOutputs=[];
 let outSel=new Set();
 let outFilter='all';
+function sortOutputsForDisplay(list){
+  return (Array.isArray(list)?list.slice():[]).sort((a,b)=>{
+    const ta=Number(a&&a.mtime)||0,tb=Number(b&&b.mtime)||0;
+    if(tb!==ta) return tb-ta;
+    return String((a&&a.name)||'').localeCompare(String((b&&b.name)||''),'zh-Hans-CN');
+  });
+}
 function renderOut(list,animate){
   if(list){
     allOutputs=list;
@@ -2481,7 +2503,7 @@ function renderOut(list,animate){
   }
   if(animate===undefined) animate=true;
   const box=$('#out-list');
-  const shown=allOutputs.filter(f=>outFilter==='all'||f.type===outFilter);
+  const shown=sortOutputsForDisplay(allOutputs.filter(f=>outFilter==='all'||f.type===outFilter));
   if(!shown.length){ box.innerHTML='<div class="empty">没有匹配的文件</div>'; updateOutFloat(); return; }
   box.innerHTML=shown.map((f,i)=>{
     const on=outSel.has(f.name);
@@ -2501,6 +2523,48 @@ outList.onclick=function(e){
   const name=row.dataset.name;if(outSel.has(name))outSel.delete(name);else outSel.add(name);
   renderOut(null,false);
 };
+/* 吸顶跟随状态：实时测量标题栏真实底边（含安全区 padding），锁定在标题栏正下方并保持占位高度。 */
+let _outStickyTop=0,_outTitlebarH=0;
+function _setStylePropIfChanged(style,prop,val){
+  if(style.getPropertyValue(prop)!==val)style.setProperty(prop,val);
+}
+function measureOutStickyTop(){
+  const rootStyle=document.documentElement.style;
+  const bar=document.querySelector('.titlebar');
+  const rect=bar?bar.getBoundingClientRect():null;
+  const safeTop=parseFloat(rootStyle.getPropertyValue('--safe-top'))||
+    parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue('--safe-top'))||0;
+  const raw=rect?Math.max(rect.bottom,rect.height):0;
+  const floorH=Math.ceil(safeTop+62);
+  const h=raw>20?Math.ceil(raw):0;
+  if(h>0)_outTitlebarH=Math.max(h,floorH);
+  const applied=_outTitlebarH>0?Math.max(_outTitlebarH,floorH):floorH;
+  _outStickyTop=applied+6;
+  _setStylePropIfChanged(rootStyle,'--titlebar-h',applied+'px');
+  _setStylePropIfChanged(rootStyle,'--out-sticky-top',_outStickyTop+'px');
+  return _outStickyTop;
+}
+function syncOutSticky(){
+  const slot=$('#out-floatbar-slot'),sentinel=$('#out-sticky-sentinel'),fb=$('#out-floatbar'),panel=$('#p-out');
+  if(!slot||!sentinel||!fb)return;
+  if(!slot.classList.contains('show')||!panel||!panel.classList.contains('active')||(_panelStage&&_panelStage.classList.contains('tab-animating'))){
+    slot.classList.remove('is-stuck');
+    slot.style.removeProperty('--out-slot-h');
+    return;
+  }
+  if(!_outStickyTop)_outStickyTop=measureOutStickyTop();
+  const sRect=sentinel.getBoundingClientRect();
+  const slotRect=slot.getBoundingClientRect();
+  const fbH=fb.offsetHeight||Math.round(fb.getBoundingClientRect().height)||0;
+  const anchorW=sRect.width>20?sRect.width:slotRect.width;
+  const anchorL=sRect.width>20?sRect.left:slotRect.left;
+  if(anchorW>20){
+    _setStylePropIfChanged(slot.style,'--out-sticky-left',Math.round(anchorL*10)/10+'px');
+    _setStylePropIfChanged(slot.style,'--out-sticky-width',Math.round(anchorW*10)/10+'px');
+  }
+  if(fbH>0)_setStylePropIfChanged(slot.style,'--out-slot-h',(fbH+14)+'px');
+  slot.classList.toggle('is-stuck',sRect.top<_outStickyTop-0.5);
+}
 function updateOutFloat(){
   const slot=$('#out-floatbar-slot');
   const fb=$('#out-floatbar');
@@ -2509,16 +2573,23 @@ function updateOutFloat(){
   const shouldShow=outSel.size>0 && !!panel && panel.classList.contains('active');
   if(c) c.textContent='已选 '+outSel.size+' 个';
   const wasShown=!!slot&&slot.classList.contains('show');
+  const wasStuck=!!slot&&slot.classList.contains('is-stuck');
+  // 固定条用上方占位块撑高；出现/收起时列表会被推一下，用首行的实际位移补偿。
+  const anchor=$('#out-list .dl-row')||$('#out-list');
+  const anchorTop=anchor?anchor.getBoundingClientRect().top:null;
+
   function finalizeClose(){
     updateOutFloat._closeTimer=null;
     if(!slot||!fb)return;
-    slot.classList.remove('show','is-closing');
+    slot.classList.remove('show','is-stuck','is-closing');
+    slot.style.removeProperty('--out-slot-h');
     slot.setAttribute('aria-hidden','true');
     if('inert' in slot)slot.inert=true;
     fb.classList.remove('show');
     fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=-1;});
     syncThemeFab();
   }
+
   if(shouldShow){
     clearTimeout(updateOutFloat._closeTimer);
     updateOutFloat._closeTimer=null;
@@ -2532,14 +2603,15 @@ function updateOutFloat(){
       fb.classList.add('show');
       fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=0;});
     }
+    if(!wasShown)measureOutStickyTop();
   }else if(wasShown&&slot){
-    // 保留 .show 220ms：先淡出+上移，再真正收起，避免瞬间消失
+    // 保留 .show 260ms：先淡出+上移，再真正收起，避免瞬间消失
     slot.setAttribute('aria-hidden','true');
     if('inert' in slot)slot.inert=true;
     if(!slot.classList.contains('is-closing')){
       slot.classList.add('is-closing');
       clearTimeout(updateOutFloat._closeTimer);
-      updateOutFloat._closeTimer=setTimeout(finalizeClose,220);
+      updateOutFloat._closeTimer=setTimeout(finalizeClose,260);
     }
     if(fb)fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=-1;});
   }else{
@@ -2549,9 +2621,14 @@ function updateOutFloat(){
     }
     if(fb)fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=-1;});
   }
+
+  syncOutSticky();
+  if(anchor&&anchorTop!=null&&(wasStuck||(slot&&slot.classList.contains('is-stuck')))){
+    const delta=anchor.getBoundingClientRect().top-anchorTop;
+    if(Math.abs(delta)>0.5)window.scrollBy(0,delta);
+  }
   syncThemeFab();
 }
-
 function updateFloat(){
   const localPanel=$('#p-local'),localView=$('#cache-view-local');
   const bar=$('#floatbar'),show=selected.size>0&&!!localPanel&&localPanel.classList.contains('active')&&!!localView&&localView.classList.contains('active');
@@ -5241,6 +5318,53 @@ input:focus-visible~.cwm-check{outline:2px solid var(--blue);outline-offset:3px}
 .chapter-row .cwm-check{width:18px;height:18px;flex:0 0 18px;margin-right:2px}
 @media (prefers-reduced-motion:reduce){.cwm-check,.cwm-check .cwm-check-mark,.cwm-check .cwm-check-dash{transition:none!important}}
 
+</style>
+<style>
+/* ===== 批量操作条吸顶跟随（完整搬运 cwm） =====
+   滚过标题栏后自动贴住，永远不用再往上拉；外层保留原位占位高度。 */
+#out-sticky-sentinel{width:100%;max-width:760px;height:1px;margin-bottom:-1px;pointer-events:none}
+#out-floatbar-slot{
+  position:sticky;
+  top:calc(var(--titlebar-h,52px) + 6px);
+  top:max(var(--out-sticky-top,0px),calc(var(--safe-top,0px) + 68px),calc(var(--titlebar-h,62px) + 6px));
+  z-index:9;
+}
+#out-floatbar-slot.show.is-stuck{min-height:var(--out-slot-h,0px);pointer-events:none}
+#out-floatbar-slot.show.is-stuck .out-floatbar-clip{min-height:var(--out-slot-h,0px);clip-path:none!important;transition:none!important;pointer-events:none}
+.panel-stage:not(.tab-animating) #out-floatbar-slot.show.is-stuck .out-floatbar-clip::before{
+  content:'';position:fixed;
+  top:calc(var(--safe-top,0px) + 61px);
+  top:calc(max(var(--out-sticky-top,0px),calc(var(--safe-top,0px) + 68px),calc(var(--titlebar-h,62px) + 6px)) - 7px);
+  left:var(--out-sticky-left,16px);
+  width:var(--out-sticky-width,calc(100vw - 32px));
+  right:auto;
+  height:calc(var(--out-slot-h,110px) + 4px);
+  background:linear-gradient(180deg,var(--bg) 82%,transparent);
+  pointer-events:none;transition:opacity 180ms ease;z-index:8;
+}
+.panel-stage:not(.tab-animating) #out-floatbar-slot.show.is-stuck.is-closing .out-floatbar-clip::before{opacity:0}
+.panel-stage:not(.tab-animating) #out-floatbar-slot.show.is-stuck #out-floatbar{
+  position:fixed!important;
+  top:calc(var(--safe-top,0px) + 68px)!important;
+  top:max(var(--out-sticky-top,0px),calc(var(--safe-top,0px) + 68px),calc(var(--titlebar-h,62px) + 6px))!important;
+  left:var(--out-sticky-left,16px)!important;
+  right:auto!important;
+  bottom:auto!important;
+  width:var(--out-sticky-width,calc(100vw - 32px))!important;
+  max-width:760px!important;
+  margin:0!important;
+  pointer-events:auto;
+  z-index:9!important;
+}
+#out-floatbar-slot.is-stuck #out-floatbar{
+  background:color-mix(in oklch,var(--card) 96%,transparent);
+  border-color:color-mix(in oklch,var(--white) 24%,transparent);
+  box-shadow:0 16px 34px -16px rgba(20,30,48,.42),0 2px 10px rgba(20,30,48,.08);
+  -webkit-backdrop-filter:blur(20px) saturate(1.45);
+  backdrop-filter:blur(20px) saturate(1.45);
+}
+#out-floatbar-slot.show.is-stuck #out-floatbar{transform:translate3d(0,0,0)}
+html[data-theme="dark"] #out-floatbar-slot.is-stuck #out-floatbar{background:rgba(34,34,38,.88);border-color:rgba(255,255,255,.16)}
 </style>
 </body>
 </html>
