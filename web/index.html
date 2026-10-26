@@ -1611,7 +1611,6 @@ html[data-keyboard-open="true"] #dl-fab {
     opacity .195s cubic-bezier(.4,0,.2,1),
     visibility 0s linear .195s !important;
 }
-html[data-keyboard-open="true"] .tabs { transform: translateY(28px) !important; }
 html[data-keyboard-open="true"] #dn { transform: translateY(140%) scale(.72) !important; }
 html[data-keyboard-open="true"] #dl-fab { transform: translateX(140%) scale(.72) !important; }
 @media (prefers-reduced-motion:reduce){
@@ -1761,8 +1760,17 @@ img.cover{cursor:zoom-in}
 #chap-modal .chapter-caret{border:0;background:none;color:#86868b;width:20px;height:28px;padding:0;font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:transform .2s var(--ease-out)}
 #chap-modal .chapter-caret svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #chap-modal .chapter-level[data-open="true"]>.chapter-head .chapter-caret{transform:rotate(90deg)}
-#chap-modal .chapter-children{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s var(--ease-out)}
-#chap-modal .chapter-level[data-open="true"]>.chapter-children{grid-template-rows:1fr}
+#chap-modal .chapter-children{
+  display:grid;grid-template-rows:1fr;contain:layout paint;
+  transition:grid-template-rows var(--dur-2) var(--ease-out),opacity var(--dur-2) var(--ease-out);
+  opacity:1;
+}
+#chap-modal .chapter-children>.cc-inner{min-height:0;overflow:hidden}
+#chap-modal .chapter-level[data-open="false"]>.chapter-children{grid-template-rows:0fr;opacity:0}
+@supports not (display:grid){
+  #chap-modal .chapter-children>.cc-inner{overflow:visible}
+  #chap-modal .chapter-level[data-open="false"]>.chapter-children{display:none}
+}
 #chap-modal .chapter-children>div{overflow:hidden;min-height:0}
 #chap-modal .chapter-check{width:28px;height:28px;margin-left:4px;display:grid;place-items:center;position:relative}
 #chap-modal .chapter-check input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;pointer-events:none}
@@ -1775,13 +1783,14 @@ img.cover{cursor:zoom-in}
 #chap-modal .chapter-row.is-unreviewed .chapter-price{color:#8e8e93}
 #chap-modal .chapter-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #chap-modal .chapter-price{color:var(--chapter-blue);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
-#chap-modal .chapter-footer{position:sticky;bottom:0;margin:0 -20px;padding:12px 20px calc(12px + var(--safe-bottom));border-top:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#chap-modal .chapter-footer{position:sticky;bottom:0;margin:0 -20px;padding:12px 20px calc(6px + var(--safe-bottom));border-top:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 #chap-modal .chapter-total{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:baseline;margin-bottom:9px;color:#6e6e73;font-size:13px}
 #chap-modal .chapter-total span,#chap-modal .chapter-total small{white-space:nowrap}
 #chap-modal .chapter-total strong,#chap-modal .chapter-total b{color:#1d1d1f;font-weight:600}
 #chap-modal .chapter-total b{color:var(--chapter-blue)}
 @media(max-width:420px){#chap-modal .chapter-total{grid-template-columns:1fr 1fr;row-gap:4px}#chap-modal .chapter-total small{grid-column:1/-1}}
 #chap-modal .chapter-afford{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:8px 0 0;font-size:13px;line-height:1.45;font-weight:600;color:#6e6e73}
+#chap-modal .chapter-need-note{grid-column:2;font-style:normal;font-size:11px;line-height:1.35;font-weight:400;color:#8a8f98}
 #chap-modal .chapter-afford strong{font-weight:700}
 #chap-modal .chapter-afford .afford-detail{flex-basis:100%;font-weight:400;font-size:12px;color:#8e8e93;overflow-wrap:anywhere;white-space:pre-line}
 #chap-modal .chapter-afford.is-ok{color:#1d8f4e}
@@ -2450,8 +2459,7 @@ html[data-theme="dark"] .fr-card{background:color-mix(in srgb,var(--card) 97%,tr
     <div class="chapter-toolbar"><button type="button" class="chapter-select-all" id="chap-select-all">全选</button><span>选择分卷、章节组或单章</span></div>
     <div class="chapter-list" id="chap-list"><div class="empty">正在加载…</div></div>
     <div class="chapter-footer">
-      <div class="chapter-total"><span>应付 <strong id="chap-selected-cost">0 币</strong></span><span>需购 <strong id="chap-purchase-count">0 章</strong></span><span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span><small>已选 <strong id="chap-selected-count">0</strong> 章</small></div>
-      <div class="chapter-afford is-idle" id="chap-afford" role="status" aria-live="polite">选择章节后这里会显示未购买章节的数量</div>
+      <div class="chapter-total"><span>应付 <strong id="chap-selected-cost">0 币</strong></span><span>需购 <strong id="chap-purchase-count">0 章</strong></span><span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span><em class="chapter-need-note" id="chap-afford">未购章节会跳过；没有添加购买功能</em><small>已选 <strong id="chap-selected-count">0</strong> 章</small></div>
       <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button><button type="button" class="btn btn-primary btn-sm" id="chap-modal-ok" disabled>开始下载</button></div>
     </div>
   </section>
@@ -4727,13 +4735,9 @@ function renderChapterSelection(data){
   }
   /* 320 是单账号：余额直接用 chapter_selection 返回的 balance。 */
   function renderAfford(amount,purchase){
-    const box=$('#chap-afford'); if(!box)return;
     const balance=amountOf(data.balance);
     if(availableBalance)availableBalance.textContent=balance==null?'—':chapMoney(balance)+' 币';
-    if(!purchase){box.className='chapter-afford is-idle';box.textContent='所选章节都已拥有或免费';return;}
-    // 320 不会自动购章：这里只提示未购买章节下不了，不做「买得起/买不起」的判断。
-    box.className='chapter-afford is-unknown';
-    box.innerHTML='其中 '+purchase+' 章未购买 <span class="afford-detail">这些章节会被跳过；本应用不会自动购章</span>';
+    /* 「未购章节会跳过」是固定文案，已放在「需购 x 章」下方，不再按数量改写 */
   }
   function update(){
     const checked=Array.prototype.slice.call(list.querySelectorAll('input[data-chapter-seq]:checked')); let amount=0;
