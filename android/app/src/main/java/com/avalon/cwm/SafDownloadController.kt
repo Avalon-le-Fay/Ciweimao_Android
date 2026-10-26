@@ -117,6 +117,66 @@ class SafDownloadController(
         }
     }
 
+    /**
+     * 下载封面：先读进内存按文件头识别真实格式，再按正确扩展名/类型写进 SAF 目录。
+     * （图床的 Content-Type 经常是 octet-stream，按扩展名命名会存出打不开的文件。）
+     */
+    fun downloadCover(treeUri: Uri, url: String, baseName: String) {
+        worker.execute {
+            try {
+                onEvent(JSONObject().put("type", "started").put("count", 1).put("batch", false))
+                val connection = open(url, "GET")
+                val bytes = try {
+                    if (connection.responseCode !in 200..299) {
+                        error("封面下载失败：HTTP ${connection.responseCode}")
+                    }
+                    connection.inputStream.use { it.readBytes() }
+                } finally {
+                    connection.disconnect()
+                }
+                require(bytes.isNotEmpty()) { "封面内容为空" }
+                val saved = saveBytes(treeUri, baseName, bytes)
+                onEvent(
+                    JSONObject()
+                        .put("type", "completed")
+                        .put("files", JSONArray(listOf(saved)))
+                        .put("batch", false)
+                        .put("clear_selection", false)
+                        .put("directory", directoryLabel(treeUri)),
+                )
+            } catch (error: Throwable) {
+                onEvent(
+                    JSONObject()
+                        .put("type", "error")
+                        .put("batch", false)
+                        .put("error", error.message?.take(1_000) ?: error.javaClass.simpleName),
+                )
+            }
+        }
+    }
+
+    private fun saveBytes(treeUri: Uri, requestedName: String, bytes: ByteArray): String {
+        val tree = DocumentFile.fromTreeUri(appContext, treeUri)
+            ?: error("下载目录授权已失效，请重新选择目录")
+        require(tree.isDirectory && tree.canWrite()) { "下载目录不可写，请重新选择目录" }
+        val type = ImageSniffer.sniff(bytes)
+        val safeBase = requestedName.replace('/', ' ').replace(92.toChar(), ' ').trim()
+            .ifBlank { "封面" }
+        val targetName = uniqueName(tree, "$safeBase.${type.extension}")
+        val target = tree.createFile(type.mimeType, targetName)
+            ?: error("无法在所选目录创建文件")
+        try {
+            appContext.contentResolver.openOutputStream(target.uri, "w")?.use { output ->
+                output.write(bytes)
+                output.flush()
+            } ?: error("无法写入所选目录")
+        } catch (error: Throwable) {
+            target.delete()
+            throw error
+        }
+        return target.name ?: targetName
+    }
+
     private fun saveUrl(
         treeUri: Uri,
         relativeUrl: String,

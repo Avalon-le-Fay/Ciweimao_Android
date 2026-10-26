@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         val url: String? = null,
         val filename: String? = null,
         val mimeType: String? = null,
+        val coverBaseName: String? = null,
     )
 
     private lateinit var safDownloadController: SafDownloadController
@@ -543,9 +544,8 @@ class MainActivity : AppCompatActivity() {
                     )
                     return@runOnUiThread
                 }
-                val fileName = coverFileName(baseName, url)
                 requestNativeDownload(
-                    PendingNativeDownload(url = url, filename = fileName, mimeType = coverMimeType(fileName)),
+                    PendingNativeDownload(url = url, coverBaseName = coverBaseName(baseName)),
                 )
             }
         }
@@ -660,30 +660,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** 封面文件名：去掉非法字符，并按原图地址补回扩展名。 */
-    private fun coverFileName(baseName: String, url: String): String {
-        val clean = baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+    /** 封面基础名：去掉非法字符、压空白、限长；扩展名由 ImageSniffer 按文件头决定。 */
+    private fun coverBaseName(baseName: String): String =
+        baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
             .replace(Regex("\\s+"), " ").trim().take(60).ifBlank { "封面" }
-        val extension = runCatching {
-            val target = if (url.contains("/img?")) {
-                Uri.parse(url).getQueryParameter("url") ?: url
-            } else {
-                url
-            }
-            val ext = (Uri.parse(target).path ?: "").substringAfterLast('.', "").lowercase()
-            if (ext in setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")) ".$ext" else ""
-        }.getOrDefault("")
-        // 没有扩展名时按最常见的情况补 .jpg，避免 SAF 创建出无类型文件
-        return clean + extension.ifBlank { ".jpg" }
-    }
-
-    private fun coverMimeType(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
-        "png" -> "image/png"
-        "webp" -> "image/webp"
-        "gif" -> "image/gif"
-        "bmp" -> "image/bmp"
-        else -> "image/jpeg"
-    }
 
     private fun requestNativeDownload(request: PendingNativeDownload) {
         if (pendingNativeDownload != null) {
@@ -705,6 +685,9 @@ class MainActivity : AppCompatActivity() {
         when {
             request.namesJson != null && request.optionsJson != null -> {
                 safDownloadController.downloadOutputs(treeUri, request.namesJson, request.optionsJson)
+            }
+            request.url != null && request.coverBaseName != null -> {
+                safDownloadController.downloadCover(treeUri, request.url, request.coverBaseName)
             }
             request.url != null && request.filename != null -> {
                 safDownloadController.downloadDirect(
