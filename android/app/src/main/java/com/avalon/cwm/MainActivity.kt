@@ -527,6 +527,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /** 需要在服务启动前生效的设置，供网页读取当前值。 */
+        @JavascriptInterface
+        fun getSettings(): String = JSONObject()
+            .put("lanAccess", AppSettings.lanAccess(this@MainActivity))
+            .toString()
+
+        /** 局域网访问开关：写盘，下次启动服务时生效。 */
+        @JavascriptInterface
+        fun setLanAccess(enabled: Boolean) {
+            if (destroyed) return
+            AppSettings.setLanAccess(this@MainActivity, enabled)
+        }
+
         /** 保存封面到「导出文件」用的 SAF 目录；没选过目录会先弹系统选择器。 */
         @JavascriptInterface
         fun saveCoverImage(url: String, baseName: String) {

@@ -1604,18 +1604,86 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
       </button>
     </div>
   </div>
-  <button id="network-address-toggle" type="button" aria-expanded="false" aria-controls="network-address-region" aria-label="显示 IP 地址" title="显示 IP 地址">IP</button>
-  <button id="accent-picker-open" type="button" title="自选强调色" aria-haspopup="dialog" aria-controls="accent-picker-overlay">
-    <span class="accent-trigger-dot" aria-hidden="true"></span><span class="accent-trigger-label">配色</span>
+  <button id="settings-open" class="tb-iconbtn" type="button" aria-label="设置" title="设置" aria-haspopup="dialog" aria-controls="settings-overlay">
+    <svg class="tb-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
-  <section id="network-address-region" aria-label="服务地址" aria-hidden="true">
-    <div id="network-address-card" aria-live="polite">
-      <button class="network-address-pill" type="button"><b>本机</b><span id="network-local-url">正在读取…</span></button>
-      <button class="network-address-pill" type="button"><b>局域网</b><span id="network-lan-url">正在读取…</span></button>
-    </div>
-  </section>
+  <!-- 强调色面板的旧触发器：面板脚本依赖它存在，这里只保留为隐藏节点 -->
+  <button id="accent-picker-open" type="button" hidden tabindex="-1" aria-hidden="true"></button>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- ===== 设置面板（标题栏齿轮） ===== -->
+<div id="settings-overlay" aria-hidden="true">
+  <div class="settings-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="settings-grab" aria-hidden="true"></div>
+    <div class="settings-head">
+      <h2 id="settings-title">设置</h2>
+      <button class="settings-close" id="settings-close" type="button" aria-label="关闭设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="settings-scroll">
+      <p class="settings-sec">通用</p>
+      <div class="settings-row">
+        <div class="settings-text"><b>自动检测更新</b><span>启动 3 秒后检查新版本</span></div>
+        <button class="settings-sw" id="set-auto-update" type="button" role="switch" aria-checked="true" aria-label="自动检测更新"><i></i></button>
+      </div>
+      <div class="settings-row">
+        <div class="settings-text"><b>局域网访问</b><span id="set-lan-hint">其他设备可用局域网地址打开</span></div>
+        <button class="settings-sw" id="set-lan" type="button" role="switch" aria-checked="true" aria-label="局域网访问"><i></i></button>
+      </div>
+
+      <p class="settings-sec">外观</p>
+      <button class="settings-row settings-tap" type="button" data-personalize="colors">
+        <div class="settings-text"><b>强调色</b></div>
+        <span class="settings-dots" id="settings-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <svg class="settings-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="settings-row settings-tap" type="button" data-personalize="menus">
+        <div class="settings-text"><b>菜单样式</b></div>
+        <span class="settings-val" id="settings-menu-style">浮动</span>
+        <svg class="settings-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="settings-row settings-tap" type="button" data-personalize="motions">
+        <div class="settings-text"><b>动效</b></div>
+        <span class="settings-val" id="settings-motion">顺滑</span>
+        <svg class="settings-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+
+      <p class="settings-sec">网络</p>
+      <div class="settings-row">
+        <div class="settings-text"><b>本机</b><span id="network-local-url">正在读取…</span></div>
+        <button class="settings-copy" type="button" data-copy="network-local-url">复制</button>
+      </div>
+      <div class="settings-row">
+        <div class="settings-text"><b>局域网</b><span id="network-lan-url">正在读取…</span></div>
+        <button class="settings-copy" type="button" data-copy="network-lan-url">复制</button>
+      </div>
+    </div>
+    <div class="settings-foot">
+      <span id="settings-version">v—</span>
+      <button class="settings-update" id="settings-check" type="button">Check for Updates</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 首次设置（只在第一次出现） ===== -->
+<div id="firstrun-overlay" aria-hidden="true">
+  <div class="fr-card" role="dialog" aria-modal="true" aria-labelledby="fr-title">
+    <h2 id="fr-title">首次设置</h2>
+    <p class="fr-sub">只询问这一次</p>
+    <div class="fr-opt">
+      <div class="fr-text"><b>自动检测更新</b><span>启动 3 秒后检查新版本</span></div>
+      <button class="settings-sw" id="fr-auto-update" type="button" role="switch" aria-checked="true" aria-label="自动检测更新"><i></i></button>
+    </div>
+    <div class="fr-opt">
+      <div class="fr-text"><b>局域网访问</b><span>允许其他设备用局域网地址打开</span></div>
+      <button class="settings-sw" id="fr-lan" type="button" role="switch" aria-checked="true" aria-label="局域网访问"><i></i></button>
+    </div>
+    <button class="fr-primary" id="fr-done" type="button">开始使用</button>
+    <p class="fr-note"><svg class="fr-gear" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>设置：通用 / 外观 / IP 地址</p>
+  </div>
+</div>
 
 <div class="wrap">
   <div class="tabs">
@@ -4800,6 +4868,7 @@ renderDlLog();
   customApply.addEventListener('click',()=>{committedCustom={day:draftCustom.day,night:draftCustom.night};localStorage.setItem(CUSTOM_ACCENT_KEY,JSON.stringify({...committedCustom,textDay:readableAccent(committedCustom.day,false),textNight:readableAccent(committedCustom.night,true),fgDay:onAccent(committedCustom.day),fgNight:onAccent(committedCustom.night)}));localStorage.setItem('cwm-accent-v1','0');renderPaletteOptions();selectedAccent='0';applyAccent('0',false);showPage('colors');notify('已应用 0 · 自选色系')});
   applyAccent(selectedAccent,false);applyMenuStyle(selectedStyle,false);applyMenuMotion(selectedMotion,false);
   openBtn.addEventListener('click',openPicker);closeBtn.addEventListener('click',closePicker);backBtn.addEventListener('click',()=>{if(sheet.classList.contains('custom-color-level')){restoreCommittedAccent();showPage('colors')}else showPage('menus')});
+  window.cwmShowPersonalizePage=showPage;
   overlay.querySelectorAll('.personalize-tab').forEach(tab=>tab.addEventListener('click',()=>showPage(tab.dataset.personalizePage)));
   overlay.addEventListener('click',e=>{if(e.target===overlay)closePicker()});
   colorGrid.addEventListener('click',e=>{const option=e.target.closest('.accent-option');if(!option)return;if(option.dataset.accentId==='0'){showPage('custom-colors');return}applyAccent(option.dataset.accentId,true)});
@@ -5076,7 +5145,7 @@ html[data-theme="dark"] #accent-picker-open{background:transparent;border-color:
     if(tab)setTimeout(syncSection,0);
   },true);
   syncSection();
-  if(info)setTimeout(check,3000);
+  if(info&&localStorage.getItem('cwm.autoUpdate')!=='0')setTimeout(check,3000);
 })();
 </script>
 
@@ -5280,6 +5349,8 @@ html[data-theme="dark"] #chap-modal .chapter-afford.is-unknown,html[data-theme="
 /* ===== 返回键：先关最上层浮层，再让 App 弹退出确认 ===== */
 window.cwmDismissTopOverlay=function(){
   try{
+    var first=document.getElementById('firstrun-overlay');
+    if(first&&first.classList.contains('open')){if(window.cwmCloseFirstRun)window.cwmCloseFirstRun();return true;}
     var cover=document.getElementById('cover-viewer');
     if(cover&&cover.classList.contains('show')&&typeof window.closeCoverViewer==='function'){window.closeCoverViewer();return true;}
     var cfm=document.getElementById('cfm-mask');
@@ -5290,6 +5361,8 @@ window.cwmDismissTopOverlay=function(){
     if(sheet&&sheet.classList.contains('show')){var d=document.getElementById('dl-sheet-close');if(d){d.click();return true;}}
     var chap=document.getElementById('chap-modal');
     if(chap&&chap.classList.contains('show')&&typeof window.closeChapModal==='function'){window.closeChapModal();return true;}
+    var settings=document.getElementById('settings-overlay');
+    if(settings&&settings.classList.contains('open')){if(window.cwmCloseSettings)window.cwmCloseSettings();return true;}
   }catch(e){}
   return false;
 };
@@ -5366,5 +5439,319 @@ input:focus-visible~.cwm-check{outline:2px solid var(--blue);outline-offset:3px}
 #out-floatbar-slot.show.is-stuck #out-floatbar{transform:translate3d(0,0,0)}
 html[data-theme="dark"] #out-floatbar-slot.is-stuck #out-floatbar{background:rgba(34,34,38,.88);border-color:rgba(255,255,255,.16)}
 </style>
+<style>
+/* ===== 标题栏图标按钮（齿轮） ===== */
+.tb-iconbtn{
+  width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;padding:0;
+  border:0;border-radius:11px;background:transparent;color:var(--titletext);
+  cursor:pointer;transition:transform .14s var(--ease-out),background-color .16s ease;
+}
+.tb-iconbtn:hover{background:rgba(115,125,140,.10)}
+html[data-theme="dark"] .tb-iconbtn:hover{background:rgba(255,255,255,.075)}
+.tb-iconbtn:active{transform:scale(.92)}
+.tb-ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* 旧触发器只保留给个性化面板脚本用，必须真的不占位 */
+#accent-picker-open[hidden]{display:none!important}
+
+/* ===== 设置面板 ===== */
+#settings-overlay{
+  position:fixed;inset:0;z-index:130;display:grid;align-items:end;
+  background:rgba(15,19,26,.28);opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 180ms ease,visibility 0s linear 180ms;
+}
+#settings-overlay.open{opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}
+.settings-sheet{
+  width:100%;max-width:680px;max-height:86vh;max-height:min(86dvh,760px);
+  margin-inline:auto;display:flex;flex-direction:column;
+  border-radius:24px 24px 0 0;border:1px solid rgba(255,255,255,.7);
+  background:color-mix(in srgb,var(--card) 94%,transparent);color:var(--text);
+  box-shadow:0 -20px 60px rgba(30,40,55,.22);
+  -webkit-backdrop-filter:blur(24px) saturate(1.35);backdrop-filter:blur(24px) saturate(1.35);
+  transform:translateY(100%);transition:transform var(--dur-overlay-in,320ms) var(--ease-drawer,cubic-bezier(.32,.72,0,1));
+  will-change:transform;
+}
+html[data-theme="dark"] .settings-sheet{background:color-mix(in srgb,var(--card) 96%,transparent);border-color:rgba(255,255,255,.12)}
+#settings-overlay.open .settings-sheet{transform:translateY(0)}
+.settings-grab{width:38px;height:4px;border-radius:99px;background:rgba(105,114,128,.28);margin:8px auto 4px;flex:0 0 auto}
+.settings-head{display:flex;align-items:center;justify-content:space-between;padding:2px 18px 8px;flex:0 0 auto}
+.settings-head h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em;color:var(--white)}
+.settings-close{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:50%;background:rgba(115,125,140,.10);color:var(--gray);cursor:pointer}
+html[data-theme="dark"] .settings-close{background:rgba(255,255,255,.08)}
+.settings-close svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.settings-scroll{overflow-y:auto;overscroll-behavior:contain;padding:0 18px 4px;flex:1 1 auto;scrollbar-width:none}
+.settings-scroll::-webkit-scrollbar{display:none}
+.settings-sec{margin:14px 0 4px;font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--gray)}
+.settings-sec:first-child{margin-top:2px}
+.settings-row{display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;border-top:1px solid rgba(120,130,145,.16);background:none;border-inline:0;border-bottom:0;text-align:start;color:inherit;font:inherit}
+.settings-sec+.settings-row{border-top:0}
+.settings-tap{cursor:pointer;transition:opacity .14s ease}
+.settings-tap:active{opacity:.55}
+.settings-text{flex:1 1 auto;min-width:0}
+.settings-text b{display:block;font-size:14px;font-weight:600;color:var(--white)}
+.settings-text span{display:block;font-size:11.5px;color:var(--gray);margin-top:2px;word-break:break-all}
+.settings-sw{
+  width:48px;height:28px;flex:0 0 auto;position:relative;padding:0;border:0;border-radius:999px;cursor:pointer;
+  background:rgba(120,130,145,.30);transition:background-color .2s ease;
+}
+html[data-theme="dark"] .settings-sw{background:rgba(255,255,255,.18)}
+.settings-sw i{
+  position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);transform:translateX(0);
+  transition:transform .24s cubic-bezier(.34,1.56,.64,1);
+}
+.settings-sw[aria-checked="true"]{background:var(--blue)}
+.settings-sw[aria-checked="true"] i{transform:translateX(20px)}
+.settings-dots{display:flex;gap:5px;flex:0 0 auto}
+.settings-dots i{width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.settings-dots i:nth-child(1){background:#0a84ff}
+.settings-dots i:nth-child(2){background:#34c759}
+.settings-dots i:nth-child(3){background:#ff9500}
+.settings-dots i:nth-child(4){background:#ff375f}
+.settings-dots i:nth-child(5){background:#8e8e93}
+.settings-val{font-size:12px;color:var(--gray);flex:0 0 auto}
+.settings-chev{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:var(--gray);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.settings-copy{border:1px solid rgba(120,130,145,.22);background:transparent;border-radius:9px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--white);cursor:pointer;flex:0 0 auto}
+.settings-copy:active{opacity:.6}
+.settings-foot{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 18px calc(14px + var(--safe-bottom));border-top:1px solid rgba(120,130,145,.16);
+  font-size:11px;color:var(--gray);
+}
+.settings-update{border:0;background:none;padding:0 0 1px;font-size:11px;font-weight:650;color:var(--gray);cursor:pointer;border-bottom:1px solid color-mix(in srgb,currentColor 20%,transparent)}
+
+/* ===== 首次设置 ===== */
+#firstrun-overlay{
+  position:fixed;inset:0;z-index:140;display:grid;place-items:center;padding:20px;
+  background:rgba(15,19,26,.32);opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .2s ease,visibility 0s linear .2s;
+}
+#firstrun-overlay.open{opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}
+.fr-card{
+  width:100%;max-width:340px;padding:22px 18px 16px;border-radius:22px;
+  background:color-mix(in srgb,var(--card) 96%,transparent);color:var(--text);
+  border:1px solid rgba(255,255,255,.6);
+  box-shadow:0 26px 60px rgba(18,26,40,.30),inset 0 1px 0 rgba(255,255,255,.5);
+  -webkit-backdrop-filter:blur(24px) saturate(1.35);backdrop-filter:blur(24px) saturate(1.35);
+  opacity:0;transform:scale(.96);
+  transition:opacity .2s var(--ease-out),transform .24s var(--ease-out);
+}
+html[data-theme="dark"] .fr-card{background:color-mix(in srgb,var(--card) 97%,transparent);border-color:rgba(255,255,255,.12)}
+#firstrun-overlay.open .fr-card{opacity:1;transform:scale(1)}
+.fr-card h2{margin:0 0 5px;font-size:19px;font-weight:700;letter-spacing:-.02em;text-align:center;color:var(--white)}
+.fr-sub{margin:0 0 16px;font-size:11.5px;line-height:1.6;color:var(--gray);text-align:center}
+.fr-gear{width:12px;height:12px;vertical-align:-2px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fr-opt{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid rgba(120,130,145,.16);border-radius:14px;margin-bottom:8px}
+.fr-text{flex:1 1 auto;min-width:0}
+.fr-text b{display:block;font-size:14px;font-weight:600;color:var(--white)}
+.fr-text span{display:block;font-size:11.5px;color:var(--gray);margin-top:2px}
+.fr-primary{
+  width:100%;margin-top:8px;border:0;border-radius:14px;padding:13px;
+  background:var(--blue);color:#fff;font-size:15px;font-weight:700;cursor:pointer;
+  transition:transform .12s var(--ease-out),filter .16s ease;
+}
+.fr-primary:active{transform:scale(.98);filter:brightness(.94)}
+.fr-note{display:flex;align-items:center;justify-content:center;gap:5px;margin:12px 0 0;font-size:10.5px;line-height:1.4;color:var(--gray);text-align:center}
+@media (prefers-reduced-motion:reduce){
+  .settings-sheet{transition:opacity .2s ease;transform:none!important;opacity:0}
+  #settings-overlay.open .settings-sheet{opacity:1}
+  .fr-card{transition:opacity .2s ease;transform:none!important}
+  .settings-sw i{transition:none}
+}
+</style>
+<script>
+/* ===== 设置面板 + 首次设置 ===== */
+(function(){
+  var LS_AUTO='cwm.autoUpdate', LS_LAN='cwm.lanAccess', LS_FIRST='cwm.firstRun.v1';
+  var ov=document.getElementById('settings-overlay');
+  var fr=document.getElementById('firstrun-overlay');
+  if(!ov||!fr) return;
+
+  var btnOpen=document.getElementById('settings-open');
+  var btnClose=document.getElementById('settings-close');
+  var swAuto=document.getElementById('set-auto-update');
+  var swLan=document.getElementById('set-lan');
+  var frAuto=document.getElementById('fr-auto-update');
+  var frLan=document.getElementById('fr-lan');
+  var frDone=document.getElementById('fr-done');
+  var lastFocus=null;
+
+  function readBool(key,def){ var v=localStorage.getItem(key); return v===null?def:v==='1'; }
+  function writeBool(key,on){ try{ localStorage.setItem(key,on?'1':'0'); }catch(e){} }
+  function bridge(){ return window.CwmAndroid||null; }
+  function nativeInfo(){
+    try{ if(bridge()&&typeof bridge().getAppInfo==='function') return JSON.parse(bridge().getAppInfo()); }catch(e){}
+    return null;
+  }
+  function setSwitch(el,on){ if(el) el.setAttribute('aria-checked',on===false?'false':'true'); }
+  function isOn(el){ return el&&el.getAttribute('aria-checked')==='true'; }
+
+  var autoUpdate=readBool(LS_AUTO,true);
+  var lanAccess=readBool(LS_LAN,true);
+  /* 原生是权威值：清过网页数据也能恢复真实状态 */
+  try{
+    if(bridge()&&typeof bridge().getSettings==='function'){
+      var ns=JSON.parse(bridge().getSettings());
+      if(ns&&typeof ns.lanAccess==='boolean'){ lanAccess=ns.lanAccess; writeBool(LS_LAN,lanAccess); }
+    }
+  }catch(e){}
+
+  function applyAuto(on){
+    autoUpdate=on; writeBool(LS_AUTO,on);
+    setSwitch(swAuto,on); setSwitch(frAuto,on);
+  }
+  function applyLan(on,quiet){
+    lanAccess=on; writeBool(LS_LAN,on);
+    setSwitch(swLan,on); setSwitch(frLan,on);
+    try{ if(bridge()&&typeof bridge().setLanAccess==='function') bridge().setLanAccess(on); }catch(e){}
+    refreshNetwork();
+    if(!quiet) toast(on?'局域网访问已开启，重启 App 生效':'局域网访问已关闭，重启 App 生效');
+  }
+
+  function refreshNetwork(){
+    if(typeof loadNetworkAddresses!=='function') return;
+    Promise.resolve(loadNetworkAddresses()).then(function(){
+      if(lanAccess) return;
+      var el=document.getElementById('network-lan-url');
+      if(el) el.textContent='已关闭（仅本机可访问）';
+    });
+  }
+  applyAuto(autoUpdate);
+  applyLan(lanAccess,true);
+
+  /* 版本号 */
+  var info=nativeInfo();
+  var verEl=document.getElementById('settings-version');
+  if(verEl) verEl.textContent=info&&info.versionName?'v'+String(info.versionName).replace(/^v/i,'')+' ('+info.versionCode+')':'v—';
+
+  /* 打开 / 关闭 */
+  function openSettings(){
+    lastFocus=document.activeElement;
+    ov.classList.add('open'); ov.setAttribute('aria-hidden','false');
+    document.body.style.overflow='hidden';
+    var sec=document.getElementById('settings-close'); if(sec) sec.focus();
+    refreshNetwork();
+  }
+  function closeSettings(){
+    ov.classList.remove('open'); ov.setAttribute('aria-hidden','true');
+    document.body.style.overflow='';
+    if(lastFocus&&lastFocus.focus) try{lastFocus.focus()}catch(e){}
+  }
+  if(btnOpen) btnOpen.addEventListener('click',openSettings);
+  if(btnClose) btnClose.addEventListener('click',closeSettings);
+  ov.addEventListener('click',function(e){ if(e.target===ov) closeSettings(); });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&ov.classList.contains('open')) closeSettings();
+  });
+
+  /* 开关 */
+  [swAuto,frAuto].forEach(function(el){
+    if(!el) return;
+    el.addEventListener('click',function(){ applyAuto(!isOn(el)); });
+  });
+  [swLan,frLan].forEach(function(el){
+    if(!el) return;
+    el.addEventListener('click',function(){ applyLan(!isOn(el)); });
+  });
+
+  /* 外观三行 → 打开现有个性化面板，关掉后回到设置 */
+  var personalizeReturn=false, pObs=null;
+  function watchPersonalize(){
+    var p=document.getElementById('accent-picker-overlay');
+    if(!p||pObs) return;
+    pObs=new MutationObserver(function(){
+      if(p.classList.contains('open')||!personalizeReturn) return;
+      personalizeReturn=false;
+      if(pObs){ pObs.disconnect(); pObs=null; }
+      setTimeout(openSettings,220);
+    });
+    pObs.observe(p,{attributes:true,attributeFilter:['class']});
+  }
+  document.querySelectorAll('[data-personalize]').forEach(function(row){
+    row.addEventListener('click',function(){
+      var page=row.getAttribute('data-personalize');
+      var trigger=document.getElementById('accent-picker-open');
+      if(!trigger) return;
+      closeSettings();
+      personalizeReturn=true;
+      trigger.click();
+      setTimeout(function(){
+        try{ if(typeof window.cwmShowPersonalizePage==='function') window.cwmShowPersonalizePage(page); }catch(e){}
+      },60);
+      watchPersonalize();
+    });
+  });
+  var STYLE_NAMES={solid:'滑动·实心胶囊',floating:'滑动·漂浮玻璃','static-pill':'静态·图标背板'};
+  var MOTION_NAMES={glide:'顺滑滑行',spring:'弹性呼吸'};
+  var sEl=document.getElementById('settings-menu-style'), mEl=document.getElementById('settings-motion');
+  if(sEl) sEl.textContent=STYLE_NAMES[localStorage.getItem('cwm-menu-style-v1')||'static-pill']||'静态·图标背板';
+  if(mEl) mEl.textContent=MOTION_NAMES[localStorage.getItem('cwm-menu-motion-v1')||'glide']||'顺滑滑行';
+
+  /* 复制地址 */
+  document.querySelectorAll('[data-copy]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var el=document.getElementById(btn.getAttribute('data-copy'));
+      var text=el?el.textContent.trim():'';
+      if(!text||text==='正在读取…') return;
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){toast('已复制 '+text)}).catch(function(){toast('复制失败')});
+      }else{ toast(text); }
+    });
+  });
+
+  /* 底部检查更新 */
+  var chk=document.getElementById('settings-check');
+  if(chk) chk.addEventListener('click',function(){
+    closeSettings();
+    if(typeof window.cwmCheckUpdate==='function') window.cwmCheckUpdate();
+    else toast('更新地址未配置');
+  });
+
+  /* ---- 首次设置 ---- */
+  function openFirstRun(){
+    setSwitch(frAuto,autoUpdate); setSwitch(frLan,lanAccess);
+    fr.classList.add('open'); fr.setAttribute('aria-hidden','false');
+  }
+  function closeFirstRun(mark){
+    fr.classList.remove('open'); fr.setAttribute('aria-hidden','true');
+    if(mark) try{ localStorage.setItem(LS_FIRST,'1'); }catch(e){}
+  }
+  if(frDone) frDone.addEventListener('click',function(){ closeFirstRun(true); });
+  fr.addEventListener('click',function(e){ if(e.target===fr) closeFirstRun(false); });
+  /* 交给系统返回键：closeTopOverlay 会调这两个 */
+  window.cwmCloseSettings=closeSettings;
+  window.cwmCloseFirstRun=function(){ closeFirstRun(false); };
+
+  function fireFirstRun(){
+    if(localStorage.getItem(LS_FIRST)) return;
+    var active=document.activeElement;
+    if(active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA')){
+      active.addEventListener('blur',function h(){
+        active.removeEventListener('blur',h);
+        setTimeout(openFirstRun,400);
+      });
+      return;
+    }
+    openFirstRun();
+  }
+  function scheduleFirstRun(){
+    if(localStorage.getItem(LS_FIRST)) return;
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      setTimeout(function(){
+        if(document.hidden){
+          document.addEventListener('visibilitychange',function h(){
+            if(document.hidden) return;
+            document.removeEventListener('visibilitychange',h);
+            setTimeout(fireFirstRun,600);
+          });
+          return;
+        }
+        fireFirstRun();
+      },600);
+    });});
+  }
+  scheduleFirstRun();
+})();
+</script>
+
 </body>
 </html>
