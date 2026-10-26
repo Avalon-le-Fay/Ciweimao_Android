@@ -496,6 +496,59 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun isAvailable(): Boolean = true
 
+        @Suppress("DEPRECATION")
+        @JavascriptInterface
+        fun getAppInfo(): String {
+            val info = packageManager.getPackageInfo(packageName, 0)
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode.toInt()
+            } else {
+                info.versionCode
+            }
+            return JSONObject()
+                .put("versionName", info.versionName ?: "")
+                .put("versionCode", code)
+                .toString()
+        }
+
+        /** 用系统浏览器打开 https 链接（下载 APK 用；WebView 自己不处理下载）。 */
+        @JavascriptInterface
+        fun openExternal(url: String) {
+            if (destroyed || !trustedBridgePage) return
+            val target = url.trim()
+            if (!target.startsWith("https://")) return
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(this@MainActivity, "没有可打开该链接的应用", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        /** 保存封面到「导出文件」用的 SAF 目录；没选过目录会先弹系统选择器。 */
+        @JavascriptInterface
+        fun saveCoverImage(url: String, baseName: String) {
+            runOnUiThread {
+                if (destroyed || !isTrustedLocalPage()) {
+                    sendNativeDownloadEvent(
+                        JSONObject().put("type", "error").put("batch", false)
+                            .put("error", "封面下载只能从本应用本地页面发起"),
+                    )
+                    return@runOnUiThread
+                }
+                if (url.isBlank() || !isTrustedLocalUrl(url)) {
+                    sendNativeDownloadEvent(
+                        JSONObject().put("type", "error").put("batch", false).put("error", "封面地址无效"),
+                    )
+                    return@runOnUiThread
+                }
+                requestNativeDownload(
+                    PendingNativeDownload(url = url, filename = coverFileName(baseName, url)),
+                )
+            }
+        }
+
         @JavascriptInterface
         fun getNativeDownloadDirectory(): String {
             if (destroyed || !trustedBridgePage) return ""
@@ -604,6 +657,21 @@ class MainActivity : AppCompatActivity() {
         fun cleanupRootImport(token: String) {
             rootCacheImporter.cleanup(token)
         }
+    }
+
+    /** 封面文件名：去掉非法字符，并按原图地址补回扩展名。 */
+    private fun coverFileName(baseName: String, url: String): String {
+        val clean = baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "cover" }
+        val extension = runCatching {
+            val target = if (url.contains("/img?")) {
+                Uri.parse(url).getQueryParameter("url") ?: url
+            } else {
+                url
+            }
+            val ext = (Uri.parse(target).path ?: "").substringAfterLast('.', "").lowercase()
+            if (ext in setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")) ".$ext" else ""
+        }.getOrDefault("")
+        return clean + extension
     }
 
     private fun requestNativeDownload(request: PendingNativeDownload) {

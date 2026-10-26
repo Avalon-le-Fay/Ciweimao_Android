@@ -1589,9 +1589,21 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
 </head>
 <body>
 <ul id="bg-squares" aria-hidden="true"><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li></ul>
-<div class="titlebar">
-  <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-  <h1>刺猬猫下载器 · Web</h1>
+<div class="titlebar" data-update="idle">
+  <div class="tb-titles">
+    <h1 id="tb-section">在线下载</h1>
+    <div class="tb-status">
+      <span class="tb-ver" id="tb-version">v—</span>
+      <span class="tb-dash" aria-hidden="true">-</span>
+      <button class="tb-update" id="tb-update" type="button" aria-live="polite">
+        <span class="u-idle">Check for Updates</span>
+        <span class="u-check">Checking…</span>
+        <span class="u-done">Up to date</span>
+        <span class="u-avail">Update Available</span>
+        <span class="u-fail">Check failed</span>
+      </button>
+    </div>
+  </div>
   <button id="network-address-toggle" type="button" aria-expanded="false" aria-controls="network-address-region" aria-label="显示 IP 地址" title="显示 IP 地址">IP</button>
   <button id="accent-picker-open" type="button" title="自选强调色" aria-haspopup="dialog" aria-controls="accent-picker-overlay">
     <span class="accent-trigger-dot" aria-hidden="true"></span><span class="accent-trigger-label">配色</span>
@@ -1945,16 +1957,26 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
   <button class="btn btn-primary" id="btn-go" tabindex="-1">开始解密</button>
 </div>
 
-<div class="modal-mask" id="chap-modal">
-  <div class="modal">
-    <h3>指定章节下载</h3>
-    <div class="sub" id="chap-modal-sub">如 1-20 或 5,8,10-12；留空=全书</div>
-    <input type="text" id="chap-modal-input" placeholder="1-20 或 5,8,10-12；留空=全书">
-    <div class="row">
-      <button class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button>
-      <button class="btn btn-primary btn-sm" id="chap-modal-ok">开始下载</button>
+<div class="modal-mask" id="chap-modal" aria-hidden="true">
+  <section class="modal chapter-modal" role="dialog" aria-modal="true">
+    <div class="modal-heading">
+      <div><span class="modal-eyebrow">下载范围</span><h3 id="chap-modal-title">指定章节下载</h3></div>
+      <button type="button" class="modal-close" id="chap-modal-close" aria-label="关闭章节选择">×</button>
     </div>
-  </div>
+    <p class="sub" id="chap-modal-sub">选择需要下载的章节；不选=下载全书。</p>
+    <div class="chapter-summary" id="chap-summary">正在读取目录与价格…</div>
+    <div class="chapter-toolbar"><button type="button" class="chapter-select-all" id="chap-select-all">全选</button><span>选择分卷、章节组或单章</span></div>
+    <div class="chapter-list" id="chap-list"><div class="empty">正在加载…</div></div>
+    <div class="chapter-footer">
+      <div class="chapter-total">
+        <span>应付 <strong id="chap-selected-cost">0 币</strong></span>
+        <span>需购 <strong id="chap-purchase-count">0 章</strong></span>
+        <span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span>
+        <small>已选 <strong id="chap-selected-count">0</strong> 章</small>
+      </div>
+      <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button><button type="button" class="btn btn-primary btn-sm" id="chap-modal-ok">开始下载</button></div>
+    </div>
+  </section>
 </div>
 <!-- 通用确认框（替代原生 confirm） -->
 <div id="cfm-mask" role="dialog" aria-modal="true">
@@ -2376,7 +2398,7 @@ function fmtSize(b){
 }
 function coverEl(book){
   if(book.cover && /^https?:/.test(book.cover)){
-    return '<img class="cover" src="'+esc(pimg(book.cover))+'" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML=\'&lt;div class=&quot;cover&quot;&gt;&lt;/div&gt;\'">';
+    return '<img class="cover" data-cover-name="'+esc(book.name||'')+'" src="'+esc(pimg(book.cover))+'" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML=\'&lt;div class=&quot;cover&quot;&gt;&lt;/div&gt;\'">';
   }
   return '<div class="cover">'+icon('book')+'</div>';
 }
@@ -2491,12 +2513,46 @@ function updateOutFloat(){
   const panel=$('#p-out');
   const shouldShow=outSel.size>0 && !!panel && panel.classList.contains('active');
   if(c) c.textContent='已选 '+outSel.size+' 个';
-  if(slot&&fb){
-    slot.classList.toggle('show',shouldShow);
-    slot.setAttribute('aria-hidden',String(!shouldShow));
-    if('inert' in slot) slot.inert=!shouldShow;
-    fb.classList.toggle('show',shouldShow);
-    fb.querySelectorAll('button').forEach(btn=>{ btn.tabIndex=shouldShow?0:-1; });
+  const wasShown=!!slot&&slot.classList.contains('show');
+  function finalizeClose(){
+    updateOutFloat._closeTimer=null;
+    if(!slot||!fb)return;
+    slot.classList.remove('show','is-closing');
+    slot.setAttribute('aria-hidden','true');
+    if('inert' in slot)slot.inert=true;
+    fb.classList.remove('show');
+    fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=-1;});
+    syncThemeFab();
+  }
+  if(shouldShow){
+    clearTimeout(updateOutFloat._closeTimer);
+    updateOutFloat._closeTimer=null;
+    if(slot){
+      slot.classList.remove('is-closing');
+      slot.classList.add('show');
+      slot.setAttribute('aria-hidden','false');
+      if('inert' in slot)slot.inert=false;
+    }
+    if(fb){
+      fb.classList.add('show');
+      fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=0;});
+    }
+  }else if(wasShown&&slot){
+    // 保留 .show 220ms：先淡出+上移，再真正收起，避免瞬间消失
+    slot.setAttribute('aria-hidden','true');
+    if('inert' in slot)slot.inert=true;
+    if(!slot.classList.contains('is-closing')){
+      slot.classList.add('is-closing');
+      clearTimeout(updateOutFloat._closeTimer);
+      updateOutFloat._closeTimer=setTimeout(finalizeClose,220);
+    }
+    if(fb)fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=-1;});
+  }else{
+    if(slot){
+      slot.setAttribute('aria-hidden','true');
+      if('inert' in slot)slot.inert=true;
+    }
+    if(fb)fb.querySelectorAll('button').forEach(btn=>{btn.tabIndex=-1;});
   }
   syncThemeFab();
 }
@@ -4012,12 +4068,13 @@ function renderShelf(kw){
 }
 $('#btn-on-dl').onclick=()=>{ const id=$('#on-bookid').value.trim(); if(id) onlineDownload(id); else toast('请输入书籍ID'); };
 let _dlBid=null, _lastLoggedBid=null;
-async function onlineDownload(bid, chapters, name){
+async function onlineDownload(bid, chapters, name, chapterIds){
   _dlBid=String(bid);
   chapters=(chapters||'').trim();
   const resume=$('#on-resume')?$('#on-resume').checked:true;
   const body={book_id:bid,resume:resume};
   if(chapters) body.chapters=chapters;
+  if(chapterIds&&chapterIds.length) body.chapter_ids=chapterIds;
   if(name) body.name=name;
   const r=await api('/api/online/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){ toast(r.error); return; }
@@ -4026,89 +4083,150 @@ async function onlineDownload(bid, chapters, name){
   onlinePoll();
 }
 
-// ===== 指定章节弹窗 =====
-let _chapModalBid=null;
-function openChapModal(bid, name){
-  _chapModalBid=bid;
-  const m=$('#chap-modal');
-  $('#chap-modal-sub').textContent=(name?('《'+name+'》 · '):'')+'如 1-20 或 5,8,10-12；留空=全书';
-  const inp=$('#chap-modal-input'); inp.value='';
-  m.classList.add('show');
-  setTimeout(()=>inp.focus(),50);
+// ===== 指定章节弹窗（目录树）=====
+let _chapModalBid=null,_chapModalName='',_chapSeq=0,_chapData=null;
+function openChapModal(bid,name){
+  _chapModalBid=bid;_chapModalName=name||'';_chapData=null;
+  const m=$('#chap-modal'); if(!m)return;
+  $('#chap-modal-sub').textContent=(name?('《'+name+'》 · '):'')+'选择需要下载的章节；不选=下载全书。';
+  $('#chap-list').innerHTML='<div class="empty">正在加载…</div>';
+  $('#chap-summary').textContent='正在读取目录与价格…';
+  $('#chap-selected-cost').textContent='0 币';
+  $('#chap-purchase-count').textContent='0 章';
+  $('#chap-selected-count').textContent='0';
+  $('#chap-available-balance').textContent='—';
+  m.classList.add('show');m.setAttribute('aria-hidden','false');
+  loadChapterTree(bid);
 }
-function confirmDialog(opts){
-  opts=opts||{};
-  return new Promise(function(resolve){
-    var supportsInset=!!(window.CSS&&CSS.supports&&CSS.supports('inset','0px'));
-    if(!supportsInset){
-      var legacyBody=opts.message||'';
-      if(opts.messageHtml){
-        var legacyNode=document.createElement('div');legacyNode.innerHTML=opts.messageHtml;
-        legacyBody=legacyNode.innerText||legacyNode.textContent||'';
-      }
-      var legacyMessage=(opts.title?(opts.title+'\n\n'):'')+(legacyBody||'确定？');
-      resolve(window.confirm(legacyMessage));
-      return;
+function closeChapModal(){
+  const m=$('#chap-modal'); if(!m)return;
+  m.classList.remove('show');m.setAttribute('aria-hidden','true');
+  _chapModalBid=null;_chapData=null;
+}
+async function loadChapterTree(bid){
+  const seq=++_chapSeq;
+  try{
+    const r=await api('/api/online/chapter_selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({book_id:bid})});
+    if(seq!==_chapSeq)return;
+    if(!r||r.ok!==true)throw new Error((r&&r.error)||'读取目录失败');
+    _chapData=r;
+    renderChapterTree(r);
+  }catch(e){
+    if(seq!==_chapSeq)return;
+    $('#chap-list').innerHTML='<div class="empty">'+esc(e.message||'读取失败')+'</div>';
+    $('#chap-summary').textContent='目录读取失败';
+  }
+}
+function renderChapterTree(data){
+  const list=$('#chap-list');
+  const divisions=data.divisions||[];
+  let html='',index=0;
+  divisions.forEach(function(vol,vi){
+    const chapters=vol.chapters||[];
+    if(!chapters.length)return;
+    const vname=vol.division_name||('第'+(vi+1)+'卷');
+    html+='<div class="chapter-level division-level" data-open="true">'
+      +'<div class="chapter-head division-head">'
+      +'<button type="button" class="chapter-caret" aria-label="展开或收起" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>'
+      +'<span class="chapter-check"><input type="checkbox" data-vol="'+vi+'"></span>'
+      +'<span class="chapter-head-title">'+esc(vname)+'</span>'
+      +'<span class="chapter-head-total">'+chapters.length+' 章</span></div>'
+      +'<div class="chapter-children"><div>';
+    for(let offset=0;offset<chapters.length;offset+=10){
+      const group=chapters.slice(offset,offset+10);
+      const start=index+1;
+      html+='<div class="chapter-level group-level" data-open="false">'
+        +'<div class="chapter-head group-head">'
+        +'<button type="button" class="chapter-caret" aria-label="展开或收起" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>'
+        +'<span class="chapter-check"><input type="checkbox" data-group="'+vi+'-'+offset+'"></span>'
+        +'<span class="chapter-head-title">第 '+start+'-'+(start+group.length-1)+' 章</span></div>'
+        +'<div class="chapter-children"><div>';
+      group.forEach(function(ch){
+        index+=1;
+        const price=(ch.pending||ch.unit_hlb==null)?null:Number(ch.unit_hlb);
+        const owned=!!ch.owned,pending=!!ch.pending;
+        const cls='chapter-row'+(owned?' is-owned':'')+(pending?' is-unreviewed':'');
+        const priceText=pending?'未审核':(owned?'已购':((price&&price>0)?(price+' 币'):'免费'));
+        html+='<label class="'+cls+'"><input type="checkbox" data-id="'+esc(ch.chapter_id||'')+'" data-price="'+(price==null?'':price)+'" data-owned="'+(owned?'1':'0')+'" data-pending="'+(pending?'1':'0')+'">'
+          +'<span class="chapter-title">'+esc(ch.chapter_title||('第 '+index+' 章'))+'</span>'
+          +'<span class="chapter-price">'+esc(priceText)+'</span></label>';
+      });
+      html+='</div></div>';
     }
-    var mask=document.getElementById('cfm-mask');
-    if(!mask){ resolve(window.confirm(opts.message||'确定？')); return; }
-    if(mask._busy){ resolve(false); return; }
-    var box=mask.querySelector('.cfm-box');
-    document.getElementById('cfm-title').textContent=opts.title||'确认';
-    var msgNode=document.getElementById('cfm-msg');
-    msgNode.classList.toggle('html',!!opts.messageHtml);
-    if(opts.messageHtml) msgNode.innerHTML=opts.messageHtml;
-    else msgNode.textContent=opts.message||'';
-    var okBtn=document.getElementById('cfm-ok'), caBtn=document.getElementById('cfm-cancel');
-    okBtn.textContent=opts.okText||'删除';
-    caBtn.textContent=opts.cancelText||'取消';
-    okBtn.className='cfm-ok'+(opts.primary?' primary':'');
-
-    var hasG=!!window.gsap;
-    if(!hasG)ensureGsap();
-    mask._busy=true;
-    mask.classList.toggle('css-anim', !hasG);
-    mask.classList.add('show');
-    if(hasG){
-      gsap.killTweensOf([mask,box]);
-      gsap.set(mask,{opacity:0}); gsap.set(box,{clearProps:'all',opacity:1});
-      gsap.to(mask,{opacity:1,duration:.2,ease:'power1.out'});
-      gsap.fromTo(box,{scale:.9,y:8},{scale:1,y:0,duration:.34,ease:'back.out(1.5)'});
+    html+='</div></div></div>';
+  });
+  list.innerHTML=html||'<div class="empty">没有可下载的章节</div>';
+  list.querySelectorAll('.chapter-caret').forEach(function(btn){
+    btn.addEventListener('click',function(e){
+      e.preventDefault();e.stopPropagation();
+      const level=btn.closest('.chapter-level');
+      const open=level.dataset.open!=='true';
+      level.dataset.open=open?'true':'false';
+      btn.setAttribute('aria-expanded',open?'true':'false');
+    });
+  });
+  list.onchange=function(e){
+    const input=e.target;
+    if(!input||input.tagName!=='INPUT')return;
+    if(input.dataset.vol!=null||input.dataset.group!=null){
+      const level=input.closest('.chapter-level');
+      level.querySelectorAll('input[data-id]').forEach(function(x){x.checked=input.checked;});
     }
-    var done=false;
-    function cleanup(){
-      okBtn.removeEventListener('click',onOk); caBtn.removeEventListener('click',onCancel);
-      mask.removeEventListener('click',onMask); document.removeEventListener('keydown',onKey);
-    }
-    function hide(){ mask.classList.remove('show','css-anim'); mask._busy=false; if(hasG) gsap.set(mask,{clearProps:'opacity'}); }
-    function finish(val){
-      if(done) return; done=true; cleanup(); resolve(val);
-      if(hasG){
-        gsap.killTweensOf([mask,box]);
-        // 果冻回弹：先轻微撑大，再缩没下坠
-        var tl=gsap.timeline({onComplete:function(){ gsap.set(box,{clearProps:'all'}); hide(); }});
-        tl.to(box,{scale:1.06,duration:.12,ease:'power2.out'})
-          .to(box,{scale:.7,y:20,opacity:0,duration:.24,ease:'power2.in'},'>');
-        gsap.to(mask,{opacity:0,duration:.36,ease:'power1.in'});
-      }else{ hide(); }
-    }
-    function onOk(){ finish(true); }
-    function onCancel(){ finish(false); }
-    function onMask(e){ if(e.target===mask) finish(false); }
-    function onKey(e){ if(e.key==='Escape') finish(false); else if(e.key==='Enter') finish(true); }
-    okBtn.addEventListener('click',onOk); caBtn.addEventListener('click',onCancel);
-    mask.addEventListener('click',onMask); document.addEventListener('keydown',onKey);
+    syncTreeChecks();
+    updateChapSummary();
+  };
+  syncTreeChecks();
+  updateChapSummary();
+}
+function syncTreeChecks(){
+  const list=$('#chap-list'); if(!list)return;
+  list.querySelectorAll('.group-level').forEach(function(g){
+    const boxes=Array.prototype.slice.call(g.querySelectorAll('input[data-id]'));
+    const on=boxes.filter(function(b){return b.checked;}).length;
+    const head=g.querySelector('.chapter-head input[data-group]');
+    if(head){head.checked=on>0&&on===boxes.length;head.indeterminate=on>0&&on<boxes.length;}
+  });
+  list.querySelectorAll('.division-level').forEach(function(v){
+    const boxes=Array.prototype.slice.call(v.querySelectorAll('input[data-id]'));
+    const on=boxes.filter(function(b){return b.checked;}).length;
+    const head=v.querySelector('.chapter-head input[data-vol]');
+    if(head){head.checked=on>0&&on===boxes.length;head.indeterminate=on>0&&on<boxes.length;}
   });
 }
-function closeChapModal(){ $('#chap-modal').classList.remove('show'); _chapModalBid=null; }
+function updateChapSummary(){
+  const boxes=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]:checked'));
+  let cost=0,need=0;
+  boxes.forEach(function(b){
+    const price=b.dataset.price===''?null:Number(b.dataset.price);
+    if(b.dataset.owned!=='1'&&price&&price>0){cost+=price;need+=1;}
+  });
+  const money=function(v){return Number(v||0).toLocaleString('zh-CN',{maximumFractionDigits:2});};
+  $('#chap-selected-count').textContent=String(boxes.length);
+  $('#chap-selected-cost').textContent=money(cost)+' 币';
+  $('#chap-purchase-count').textContent=need+' 章';
+  const bal=_chapData&&_chapData.balance!=null?Number(_chapData.balance):null;
+  $('#chap-available-balance').textContent=bal==null?'—':money(bal)+' 币';
+  if(_chapData){
+    $('#chap-summary').textContent='共 '+_chapData.total+' 章 · 已购 '+_chapData.owned+' · 免费 '+_chapData.free+' · 需购 '+_chapData.pending+' · 未审核 '+_chapData.unreviewed;
+  }
+}
+$('#chap-modal-close').onclick=closeChapModal;
 $('#chap-modal-cancel').onclick=closeChapModal;
-$('#chap-modal').onclick=(e)=>{ if(e.target.id==='chap-modal') closeChapModal(); };
-$('#chap-modal-ok').onclick=()=>{
-  const bid=_chapModalBid; const v=$('#chap-modal-input').value.trim();
-  closeChapModal();
-  if(bid) onlineDownload(bid, v);
+$('#chap-modal').onclick=function(e){ if(e.target&&e.target.id==='chap-modal') closeChapModal(); };
+$('#chap-select-all').onclick=function(){
+  const boxes=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]'));
+  if(!boxes.length)return;
+  const all=boxes.every(function(b){return b.checked;});
+  boxes.forEach(function(b){b.checked=!all;});
+  syncTreeChecks();updateChapSummary();
 };
-$('#chap-modal-input').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#chap-modal-ok').click(); });
+$('#chap-modal-ok').onclick=function(){
+  const bid=_chapModalBid,name=_chapModalName;
+  const ids=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]:checked'))
+    .map(function(b){return b.dataset.id;}).filter(Boolean);
+  closeChapModal();
+  if(bid)onlineDownload(bid,'',name,ids);
+};
 const _outputsSyncedForDoneTasks=new Set();
 let onlinePollTimer=null,onlinePollResume=null;
 // ===== Download human verification continuation =====
@@ -4727,5 +4845,250 @@ async function load(){
 select.addEventListener('focus',load);select.addEventListener('pointerdown',load);
 })();
 </script>
+
+/* ===== 标题栏：页签标题 + 版本/更新状态 ===== */
+.titlebar{--tb-ok:#1a7f37;--tb-warn:#b26a00}
+@media (prefers-color-scheme:dark){ .titlebar{--tb-ok:#5ddc8b;--tb-warn:#ffb340} }
+html[data-theme="dark"] .titlebar{--tb-ok:#5ddc8b;--tb-warn:#ffb340}
+html[data-theme="light"] .titlebar{--tb-ok:#1a7f37;--tb-warn:#b26a00}
+.titlebar .tb-titles{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:2px}
+.titlebar .tb-titles h1{margin:0;flex:none;font-size:var(--fs-title);line-height:1.25;font-weight:650;letter-spacing:-.01em;color:var(--titletext);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-status{display:flex;align-items:center;gap:5px;min-width:0;font-size:11px;line-height:1.2}
+.tb-ver{display:inline-flex;align-items:center;gap:5px;font-weight:700;white-space:nowrap;color:var(--tb-ok);font-variant-numeric:tabular-nums}
+.tb-ver::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.tb-dash{color:var(--titletext);opacity:.45;font-weight:600}
+.tb-update{border:0;background:none;margin:0;padding:0 0 1px;font:inherit;font-size:11px;font-weight:650;color:var(--text);white-space:nowrap;cursor:pointer;border-bottom:1px solid color-mix(in srgb,currentColor 20%,transparent);transition:color .16s,border-color .16s}
+.tb-update:active{opacity:.65}
+.tb-update[hidden]{display:none}
+.tb-update span{display:none}
+.titlebar[data-update="idle"] .tb-update .u-idle{display:inline}
+.titlebar[data-update="checking"] .tb-update .u-check{display:inline}
+.titlebar[data-update="latest"] .tb-update .u-done{display:inline}
+.titlebar[data-update="available"] .tb-update .u-avail{display:inline}
+.titlebar[data-update="failed"] .tb-update .u-fail{display:inline}
+.titlebar[data-update="checking"] .tb-ver{color:var(--blue)}
+.titlebar[data-update="checking"] .tb-ver::before{animation:tbPulse 1s ease-in-out infinite}
+.titlebar[data-update="checking"] .tb-update{color:var(--blue);border-bottom-color:transparent}
+.titlebar[data-update="latest"] .tb-update{color:var(--tb-ok);border-bottom-color:transparent}
+.titlebar[data-update="available"] .tb-ver{color:var(--tb-warn)}
+.titlebar[data-update="available"] .tb-update{color:var(--tb-warn);border-bottom-color:transparent}
+.titlebar[data-update="failed"] .tb-update{opacity:.65;border-bottom-color:transparent}
+@keyframes tbPulse{0%,100%{opacity:1}50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){ .titlebar[data-update="checking"] .tb-ver::before{animation:none} }
+#accent-picker-open{margin-inline-start:0;border:0;background:transparent;box-shadow:none;min-width:34px;height:34px;padding:0 4px;border-radius:10px;gap:5px;justify-content:center}
+html[data-theme="dark"] #accent-picker-open{background:transparent;border-color:transparent}
+#accent-picker-open:active{transform:scale(.94)}
+.accent-trigger-dot{width:17px;height:17px;box-shadow:none;border:2px solid color-mix(in srgb,var(--blue) 55%,transparent);background:color-mix(in srgb,var(--blue) 22%,transparent)}
+
+
+<script>
+/* ===== 标题栏：版本号 + 检查更新（公开 Release 的 Latest） ===== */
+(function(){
+  var REPO='Avalon-le-Fay/Ciweimao_Android';
+  var API='https://api.github.com/repos/'+REPO+'/releases/latest';
+  var PAGE='https://github.com/'+REPO+'/releases/latest';
+  var TIMEOUT=9000;
+  var bar=document.querySelector('.titlebar'); if(!bar)return;
+  var sectionEl=document.getElementById('tb-section');
+  var verEl=document.getElementById('tb-version');
+  var btn=document.getElementById('tb-update');
+  var dash=bar.querySelector('.tb-dash');
+  var state='idle',latest=null,timer=null,info=null;
+
+  function setState(s){state=s;bar.setAttribute('data-update',s);if(timer){clearTimeout(timer);timer=null;}}
+  function appInfo(){
+    try{
+      if(window.CwmAndroid&&typeof window.CwmAndroid.getAppInfo==='function'){
+        return JSON.parse(window.CwmAndroid.getAppInfo());
+      }
+    }catch(e){}
+    return null;
+  }
+  function openUrl(url){
+    if(!url)return;
+    if(window.CwmAndroid&&typeof window.CwmAndroid.openExternal==='function'){window.CwmAndroid.openExternal(url);}
+    else{try{window.open(url,'_blank');}catch(e){location.href=url;}}
+  }
+  function versionOf(text){
+    var m=String(text||'').match(/(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+    if(!m)return 0;
+    return (Number(m[1])||0)*10000+(Number(m[2])||0)*100+(Number(m[3])||0);
+  }
+  function check(){
+    if(state==='checking')return;
+    if(state==='available'){openUrl(latest&&latest.url||PAGE);return;}
+    if(!info){setState('failed');timer=setTimeout(function(){setState('idle')},3000);return;}
+    setState('checking');
+    var ctrl=(typeof AbortController==='function')?new AbortController():null;
+    var to=setTimeout(function(){if(ctrl)ctrl.abort();},TIMEOUT);
+    fetch(API,{cache:'no-store',headers:{'Accept':'application/vnd.github+json'},signal:ctrl?ctrl.signal:undefined})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(function(j){
+        clearTimeout(to);
+        var tag=j&&(j.tag_name||j.name)||'';
+        var url=j&&j.html_url||PAGE;
+        if(versionOf(tag)>versionOf(info.versionName)){latest={url:url,tag:tag};setState('available');}
+        else{setState('latest');timer=setTimeout(function(){if(state==='latest')setState('idle')},2600);}
+      })
+      .catch(function(){
+        clearTimeout(to);
+        setState('failed');
+        timer=setTimeout(function(){if(state==='failed')setState('idle')},3200);
+      });
+  }
+  info=appInfo();
+  if(info&&info.versionName){
+    verEl.textContent='v'+String(info.versionName).replace(/^v/i,'');
+  }else{
+    if(btn)btn.hidden=true;
+    if(dash)dash.hidden=true;
+  }
+  if(btn)btn.addEventListener('click',check);
+
+  // 标题 = 当前页签
+  function syncSection(){
+    var tab=document.querySelector('.tab.active');
+    if(tab&&sectionEl)sectionEl.textContent=(tab.textContent||'').trim();
+  }
+  document.addEventListener('click',function(e){
+    var tab=e.target&&e.target.closest?e.target.closest('.tab[data-tab]'):null;
+    if(tab)setTimeout(syncSection,0);
+  },true);
+  syncSection();
+  if(info)setTimeout(check,3000);
+})();
+</script>
+
+
+/* ===== 封面：点开看原图，图下方圆形按钮下载（走原生 SAF 目录） ===== */
+img.cover{cursor:zoom-in}
+#cover-viewer{position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;
+  background:rgba(240,242,246,.20);
+  background:color-mix(in oklch, var(--bg) 20%, transparent);
+  -webkit-backdrop-filter:blur(28px) saturate(1.7);
+  backdrop-filter:blur(28px) saturate(1.7);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .2s var(--ease-out),visibility 0s linear .2s}
+#cover-viewer.show{opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}
+#cover-viewer img{max-width:92vw;max-height:78vh;border-radius:14px;object-fit:contain;border:1px solid rgba(255,255,255,.32);box-shadow:0 24px 70px rgba(0,0,0,.38);transform:scale(.94);transition:transform .22s var(--ease-out)}
+#cover-viewer.show img{transform:none}
+.cover-viewer-dl{width:52px;height:52px;padding:0;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--white);
+  background:rgba(255,255,255,.83);
+  background:color-mix(in oklch, var(--card) 83%, transparent);
+  -webkit-backdrop-filter:blur(21px) saturate(1.5);
+  backdrop-filter:blur(21px) saturate(1.5);
+  border:1px solid transparent;
+  box-shadow:0 8px 22px rgba(20,30,45,.16),inset 0 1px 0 rgba(255,255,255,.55);
+  opacity:0;transform:translateY(8px);
+  transition:transform var(--dur-1) var(--ease-spring),box-shadow var(--dur-2) var(--ease-io),opacity var(--dur-2) var(--ease-io)}
+#cover-viewer.show .cover-viewer-dl{opacity:1;transform:none;transition-delay:.06s}
+.cover-viewer-dl:active{transform:scale(.96)}
+.cover-viewer-dl .ic{width:24px;height:24px;vertical-align:0}
+.cover-viewer-close{position:absolute;top:calc(env(safe-area-inset-top) + 16px);right:calc(16px + env(safe-area-inset-right));width:42px;height:42px;border-radius:50%;cursor:pointer;color:var(--white);
+  background:rgba(255,255,255,.83);
+  background:color-mix(in oklch, var(--card) 83%, transparent);
+  -webkit-backdrop-filter:blur(21px) saturate(1.5);
+  backdrop-filter:blur(21px) saturate(1.5);
+  border:1px solid transparent;
+  box-shadow:0 8px 22px rgba(20,30,45,.16),inset 0 1px 0 rgba(255,255,255,.55);
+  transition:transform var(--dur-1) var(--ease-spring),box-shadow var(--dur-2) var(--ease-io),opacity var(--dur-2) var(--ease-io);
+  font-size:20px;line-height:1}
+.cover-viewer-close:active{transform:scale(.96)}
+@media(prefers-reduced-motion:reduce){#cover-viewer,#cover-viewer img,.cover-viewer-dl{transition:none}}
+
+
+<div id="cover-viewer" aria-hidden="true">
+  <img id="cover-viewer-img" alt="">
+  <button class="cover-viewer-dl" id="cover-viewer-dl" type="button" aria-label="下载封面" title="下载封面"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>
+  <button class="cover-viewer-close" id="cover-viewer-close" type="button" aria-label="关闭">×</button>
+</div>
+
+
+<script>
+/* ===== 封面查看器：点封面看原图，按钮下载到 SAF 目录 ===== */
+(function(){
+  var box=document.getElementById('cover-viewer'),img=document.getElementById('cover-viewer-img');
+  if(!box||!img)return;
+  var currentName='';
+  function open(src,name){
+    if(!src)return;
+    currentName=name?String(name):'';
+    img.src=src;img.alt=currentName;
+    box.classList.add('show');box.setAttribute('aria-hidden','false');
+  }
+  function close(){
+    if(!box.classList.contains('show'))return;
+    box.classList.remove('show');box.setAttribute('aria-hidden','true');
+    setTimeout(function(){if(!box.classList.contains('show'))img.removeAttribute('src');},240);
+  }
+  function download(){
+    var bridge=null;
+    try{bridge=document.documentElement.getAttribute('data-runtime')==='apk-webview'?(window.CwmAndroid||null):null}catch(e){}
+    if(!bridge||typeof bridge.saveCoverImage!=='function'){toast('下载封面需要 APK 内置 WebView');return;}
+    var src=img.currentSrc||img.src;
+    if(!src){toast('封面还没加载完成');return;}
+    try{bridge.saveCoverImage(src,currentName||'封面');}
+    catch(e){toast('无法开始下载：'+(e&&e.message?e.message:e));}
+  }
+  document.addEventListener('click',function(e){
+    var cover=e.target&&e.target.closest?e.target.closest('img.cover'):null;
+    if(cover){e.stopPropagation();e.preventDefault();open(cover.currentSrc||cover.src,cover.dataset.coverName||'');return;}
+  },true);
+  box.addEventListener('click',function(e){
+    if(e.target.closest('#cover-viewer-img'))return;   // 点图片本身不关
+    if(e.target.closest('#cover-viewer-dl'))download();
+    close();
+  });
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+  window.openCoverViewer=open;window.closeCoverViewer=close;
+})();
+</script>
+
+
+/* 悬浮批量条收起：保持 220ms 先淡出+上移，再移除 show（避免直接跳没） */
+#out-floatbar{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+#out-floatbar-slot.is-closing{pointer-events:none}
+#out-floatbar-slot.is-closing .out-floatbar-clip{pointer-events:none}
+#out-floatbar-slot.is-closing #out-floatbar{opacity:0!important;transform:translate3d(0,-11px,0) scale(.97)!important;pointer-events:none!important}
+@media(prefers-reduced-motion:reduce){#out-floatbar{transition:none}}
+
+
+/* ===== 指定章节：目录树 ===== */
+.chapter-modal{max-width:430px;max-height:86vh;display:flex;flex-direction:column;padding:18px 18px 0}
+.chapter-modal .modal-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:2px}
+.modal-eyebrow{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--blue);opacity:.9}
+.modal-close{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;background:var(--card2);color:var(--gray);font-size:20px;line-height:1;cursor:pointer}
+.modal-close:active{transform:scale(.94)}
+.chapter-summary{padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13px;line-height:1.5;color:var(--white)}
+.chapter-toolbar{display:flex;align-items:center;gap:8px;padding:10px 0 6px;color:var(--gray);font-size:12px}
+.chapter-select-all{border:0;padding:4px 0;background:none;color:var(--blue);font:600 13px inherit;cursor:pointer}
+.chapter-list{flex:1 1 auto;min-height:0;max-height:52vh;overflow:auto;margin:0 -18px;padding:0 18px;border-top:1px solid rgba(120,130,145,.18)}
+.chapter-list .empty{padding:24px 0;text-align:center;color:var(--gray);font-size:13px}
+.chapter-level{border-bottom:1px solid rgba(120,130,145,.18)}
+.chapter-head{display:flex;align-items:center;gap:8px;min-height:46px;padding:6px 0;color:var(--white);font-size:15px}
+.chapter-head-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.division-head{font-size:16px;font-weight:650;color:var(--blue)}
+.group-head{padding-left:18px;font-size:14px}
+.chapter-head-total{color:var(--gray);font-size:12px;white-space:nowrap}
+.chapter-caret{flex:0 0 auto;width:24px;height:28px;border:0;padding:0;background:none;color:var(--gray);cursor:pointer;display:grid;place-items:center;transition:transform .2s var(--ease-out)}
+.chapter-caret svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chapter-level[data-open="true"]>.chapter-head .chapter-caret{transform:rotate(90deg)}
+.chapter-children{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s var(--ease-out)}
+.chapter-level[data-open="true"]>.chapter-children{grid-template-rows:1fr}
+.chapter-children>div{overflow:hidden;min-height:0}
+.chapter-check{flex:0 0 auto;display:grid;place-items:center;width:24px;height:24px}
+.chapter-check input,.chapter-row input{width:18px;height:18px;margin:0;accent-color:var(--blue)}
+.chapter-row{display:flex;align-items:center;gap:8px;min-height:42px;padding:6px 0 6px 50px;border-bottom:1px solid rgba(120,130,145,.10);font-size:13px;color:var(--white);cursor:pointer}
+.chapter-row:last-child{border-bottom:0}
+.chapter-row.is-owned{opacity:.6}
+.chapter-row.is-unreviewed .chapter-price{color:var(--gray)}
+.chapter-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chapter-price{flex:0 0 auto;color:var(--blue);font-size:12px;white-space:nowrap}
+.chapter-footer{position:sticky;bottom:0;margin:0 -18px;padding:10px 18px calc(12px + var(--safe-bottom));border-top:1px solid rgba(120,130,145,.18);background:var(--card)}
+.chapter-total{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px;color:var(--gray);font-size:12px;flex-wrap:wrap}
+.chapter-total strong,.chapter-total b{color:var(--white);font-weight:650}
+.chapter-total b{color:var(--blue)}
+@media (prefers-reduced-motion:reduce){.chapter-children,.chapter-caret{transition:none}}
+
 </body>
 </html>
