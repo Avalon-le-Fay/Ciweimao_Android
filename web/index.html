@@ -4189,7 +4189,7 @@ function renderChapterSelection(data){
     if(!purchase){box.className='chapter-afford is-idle';box.textContent='所选章节都已拥有或免费';return;}
     // 320 不会自动购章：这里只提示未购买章节下不了，不做「买得起/买不起」的判断。
     box.className='chapter-afford is-unknown';
-    box.innerHTML='其中 '+purchase+' 章未购买 <span class="afford-detail">这些章节下载会失败；本应用不会自动购章</span>';
+    box.innerHTML='其中 '+purchase+' 章未购买 <span class="afford-detail">这些章节会被跳过；本应用不会自动购章</span>';
   }
   function update(){
     const checked=Array.prototype.slice.call(list.querySelectorAll('input[data-chapter-seq]:checked')); let amount=0;
