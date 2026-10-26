@@ -2030,7 +2030,7 @@ html[data-theme="dark"] .fr-card{background:color-mix(in srgb,var(--card) 97%,tr
         <svg class="settings-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
       </button>
 
-      <p class="settings-sec">网络</p>
+      <p class="settings-sec">IP 地址</p>
       <div class="settings-row">
         <div class="settings-text"><b>本机</b><span id="network-local-url">正在读取…</span></div>
         <button class="settings-copy" type="button" data-copy="network-local-url">复制</button>
@@ -2623,8 +2623,9 @@ async function switchMainTab(tab){
     : [{opacity:0,transform:'translateX('+(direction*24)+'px)'},{opacity:1,transform:'translateX(0)'}];
   const outAnim=oldPanel.animate(outFrames,{duration:reduce?90:170,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
   const inAnim=newPanel.animate(inFrames,{duration:reduce?110:240,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  const heightAnim=_panelStage.animate([{height:oldHeight+'px'},{height:newHeight+'px'}],{duration:reduce?110:240,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});
-  await waitAllSettled([outAnim.finished,inAnim.finished,heightAnim.finished]);
+  // 高度直接跳到新值：动画 height 会让整页每帧重排
+  _panelStage.style.height=newHeight+'px';
+  await waitAllSettled([outAnim.finished,inAnim.finished]);
   oldPanel.classList.remove('active');
   newPanel.classList.add('active');
   oldPanel.classList.remove('tab-transitioning');newPanel.classList.remove('tab-transitioning');
@@ -2634,7 +2635,7 @@ async function switchMainTab(tab){
   });
   // 先恢复新页的正常文档流，但暂时保留舞台固定高度；再读取真实最终高度。
   _panelStage.classList.remove('tab-animating');
-  [outAnim,inAnim,heightAnim].forEach(a=>{try{a.cancel()}catch(e){}});
+  [outAnim,inAnim].forEach(a=>{try{a.cancel()}catch(e){}});
   _panelStage.style.height=newHeight+'px';
   const finalHeight=newPanel.getBoundingClientRect().height;
   if(Math.abs(finalHeight-newHeight)>.5){
