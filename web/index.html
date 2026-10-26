@@ -4129,12 +4129,27 @@ async function loadChapterTree(bid){
     if(seq!==_chapSeq)return;
     if(!r||r.ok!==true)throw new Error((r&&r.error)||'读取目录失败');
     _chapSelectionData=r;
-    renderChapterSelection(r);
+    renderAfterOpen($('#chap-modal'),bid,r);
   }catch(e){
     if(seq!==_chapSeq)return;
     $('#chap-list').innerHTML='<div class="empty">'+esc(e.message||'读取失败')+'</div>';
     $('#chap-summary').textContent='目录读取失败';
   }
+}
+/* 建树会插入上千个节点并触发整页布局；在抽屉还在滑入时插入会抢帧。
+   等 transform 结束（或 380ms）再动 DOM。 */
+function renderAfterOpen(modal,bid,data){
+  var panel=modal.querySelector('.modal'),done=false;
+  function run(){
+    if(done)return;done=true;
+    panel.removeEventListener('transitionend',onEnd);
+    if(_chapModalBid===bid)renderChapterSelection(data);
+  }
+  function onEnd(event){
+    if(event.target===panel&&(event.propertyName==='transform'||event.propertyName==='opacity'))run();
+  }
+  panel.addEventListener('transitionend',onEnd);
+  setTimeout(run,380);
 }
 function renderChapterSelection(data){
   const list=$('#chap-list'), summary=$('#chap-summary');
@@ -4915,7 +4930,7 @@ html[data-theme="dark"] #accent-picker-open{background:transparent;border-color:
   var REPO='Avalon-le-Fay/Ciweimao_Android';
   var API='https://api.github.com/repos/'+REPO+'/releases/latest';
   var PAGE='https://github.com/'+REPO+'/releases/latest';
-  var TIMEOUT=9000;
+  var TIMEOUT=8000;
   var bar=document.querySelector('.titlebar'); if(!bar)return;
   var sectionEl=document.getElementById('tb-section');
   var verEl=document.getElementById('tb-version');
@@ -5078,12 +5093,24 @@ img.cover{cursor:zoom-in}
 
 
 <style>
-/* 悬浮批量条收起：保持 220ms 先淡出+上移，再移除 show（避免直接跳没） */
-#out-floatbar{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+/* 悬浮批量条：入场/出场动效完整搬运 cwm（淡入 + 上移 + 回弹） */
+#out-floatbar{
+  display:flex;opacity:0;transform:translateY(-11px) scale(.97);transform-origin:50% 0;pointer-events:none;
+  transition:opacity 140ms var(--ease-out),transform 170ms var(--ease-out),
+    background-color 220ms ease,border-color 220ms ease,box-shadow 240ms var(--ease-out);
+}
+#out-floatbar.show{
+  opacity:1;transform:none;pointer-events:auto;
+  transition:opacity 190ms var(--ease-out),transform 260ms var(--ease-spring),
+    background-color 220ms ease,border-color 220ms ease,box-shadow 240ms var(--ease-out);
+}
+@media(prefers-reduced-motion:reduce){
+  #out-floatbar,#out-floatbar.show{transform:none;transition:opacity 120ms ease}
+}
+/* 收起：保持 .show 260ms，先淡出+上移，再移除 show，避免直接跳没 */
 #out-floatbar-slot.is-closing{pointer-events:none}
 #out-floatbar-slot.is-closing .out-floatbar-clip{pointer-events:none}
-#out-floatbar-slot.is-closing #out-floatbar{opacity:0!important;transform:translate3d(0,-11px,0) scale(.97)!important;pointer-events:none!important}
-@media(prefers-reduced-motion:reduce){#out-floatbar{transition:none}}
+#out-floatbar-slot.is-closing #out-floatbar{opacity:0!important;transform:translateY(-11px) scale(.97)!important;pointer-events:none!important}
 
 
 </style>

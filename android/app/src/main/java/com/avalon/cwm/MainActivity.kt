@@ -662,7 +662,8 @@ class MainActivity : AppCompatActivity() {
 
     /** 封面文件名：去掉非法字符，并按原图地址补回扩展名。 */
     private fun coverFileName(baseName: String, url: String): String {
-        val clean = baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "cover" }
+        val clean = baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .replace(Regex("\\s+"), " ").trim().take(60).ifBlank { "封面" }
         val extension = runCatching {
             val target = if (url.contains("/img?")) {
                 Uri.parse(url).getQueryParameter("url") ?: url
