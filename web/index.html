@@ -1769,27 +1769,36 @@ html[data-theme="dark"] #chap-modal .chapter-afford.is-unknown,html[data-theme="
 @media (prefers-reduced-motion:reduce){#chap-modal .modal,#chap-modal .chapter-children,#chap-modal .chapter-caret{transition:none!important}}
 </style>
 <style>
-/* 勾选组件：圆形=分卷/章节组，方形=单章 */
+/* 勾选组件（与 cwm 逐字对齐）：圆环靠 SVG stroke，勾选靠 inset 填充 + dashoffset */
 .chapter-check{position:relative}
 .chapter-check input,.chapter-row>input[type=checkbox]{position:absolute;width:1px;height:1px;margin:0;opacity:0;pointer-events:none}
-.cwm-check{width:24px;height:24px;flex:0 0 24px;display:block;border-radius:50%;
-  background:color-mix(in oklch,var(--text) 6%,transparent);
-  box-shadow:inset 0 0 0 1.5px color-mix(in oklch,var(--text) 30%,transparent);
-  transition:background .18s ease,box-shadow .18s ease}
+.cwm-check{
+  display:block;width:22px;height:22px;flex:0 0 22px;border-radius:50%;
+  stroke-width:3.5;stroke-miterlimit:10;
+  stroke:color-mix(in srgb,var(--text) 40%,transparent);
+  box-shadow:inset 0 0 0 0 var(--blue);
+  transform:scale(.9);
+  transition:box-shadow .2s var(--ease-out),stroke .16s ease,transform .22s var(--ease-spring);
+}
 .cwm-check.is-square{border-radius:7px}
-.cwm-check .cwm-check-mark{stroke:var(--accent-fg,#fff);stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;
-  stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .22s var(--ease-out)}
-.cwm-check .cwm-check-dash{stroke:var(--accent-fg,#fff);stroke-width:3.4;stroke-linecap:round;
-  stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .18s ease}
-input:checked~.cwm-check{background:var(--blue);box-shadow:none}
+.cwm-check .cwm-check-mark{
+  stroke:var(--accent-fg,#fff);stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:48;stroke-dashoffset:48;
+  transition:stroke-dashoffset .2s var(--ease-out);
+}
+.cwm-check .cwm-check-dash{
+  stroke:var(--accent-fg,#fff);stroke-width:3.5;stroke-linecap:round;
+  stroke-dasharray:20;stroke-dashoffset:20;
+  transition:stroke-dashoffset .2s var(--ease-out);
+}
+input:checked~.cwm-check{stroke:var(--blue);box-shadow:inset 0 0 0 30px var(--blue);transform:scale(1)}
 input:checked~.cwm-check .cwm-check-mark{stroke-dashoffset:0;transition-delay:.08s}
-input:indeterminate~.cwm-check{background:var(--blue);box-shadow:none}
+input:indeterminate~.cwm-check{stroke:var(--blue);box-shadow:inset 0 0 0 30px var(--blue);transform:scale(1)}
 input:indeterminate~.cwm-check .cwm-check-dash{stroke-dashoffset:0;transition-delay:.08s}
 input:focus-visible~.cwm-check{outline:2px solid var(--blue);outline-offset:3px}
-.chapter-row{position:relative}
-.chapter-row .cwm-check{width:18px;height:18px;flex:0 0 18px;margin-right:2px}
-@media (prefers-reduced-motion:reduce){.cwm-check,.cwm-check .cwm-check-mark,.cwm-check .cwm-check-dash{transition:none!important}}
-
+@media(prefers-reduced-motion:reduce){
+  .cwm-check,.cwm-check .cwm-check-mark,.cwm-check .cwm-check-dash{transition:none!important}
+}
 </style>
 <style>
 /* ===== 批量操作条吸顶跟随（完整搬运 cwm） =====
