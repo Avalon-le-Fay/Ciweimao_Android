@@ -1599,6 +1599,27 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
   right: -10px;
 }
 
+/* ===== 键盘弹出时收起底部浮层（cwm 同款）===== */
+html[data-keyboard-open="true"] .tabs,
+html[data-keyboard-open="true"] #dn,
+html[data-keyboard-open="true"] #dl-fab {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition:
+    transform .195s cubic-bezier(.4,0,.2,1),
+    opacity .195s cubic-bezier(.4,0,.2,1),
+    visibility 0s linear .195s !important;
+}
+html[data-keyboard-open="true"] .tabs { transform: translateY(28px) !important; }
+html[data-keyboard-open="true"] #dn { transform: translateY(140%) scale(.72) !important; }
+html[data-keyboard-open="true"] #dl-fab { transform: translateX(140%) scale(.72) !important; }
+@media (prefers-reduced-motion:reduce){
+  html[data-keyboard-open="true"] .tabs,
+  html[data-keyboard-open="true"] #dn,
+  html[data-keyboard-open="true"] #dl-fab { transition: none !important; }
+}
+
 
 </style>
 <style>
@@ -5738,5 +5759,77 @@ window.cwmDismissTopOverlay=function(){
 })();
 </script>
 
+
+<script>
+/* ===== 键盘感知：输入法弹出时收起底部浮层（移植自 cwm）===== */
+(function(){
+  var root=document.documentElement,viewport=window.visualViewport;
+  if(!root) return;
+  var fullHeight=visibleHeight(),fullWidth=window.innerWidth||root.clientWidth;
+  var keyboardOpen=false,awaitingKeyboard=false,queued=false,focusTimer=null;
+  var nativeKeyboardKnown=false,nativeKeyboardVisible=false;
+
+  window.cwmSetKeyboardState=function(visible,animating){
+    nativeKeyboardKnown=true;nativeKeyboardVisible=!!visible;
+    keyboardOpen=!!visible;awaitingKeyboard=false;clearTimeout(focusTimer);
+    publish();
+  };
+  function visibleHeight(){
+    var height=window.innerHeight||root.clientHeight;
+    if(viewport&&Math.abs((viewport.scale||1)-1)<0.02)height=Math.min(height,viewport.height);
+    return height;
+  }
+  function isTextEditor(el){
+    if(!el||el.disabled||el.readOnly)return false;
+    if(el.getAttribute&&el.getAttribute('inputmode')==='none')return false;
+    if(el.isContentEditable||el.tagName==='TEXTAREA')return true;
+    return el.tagName==='INPUT'&&/^(text|search|password|email|tel|url|number)$/.test(el.type||'text');
+  }
+  function usesTouchKeyboard(){
+    return (window.navigator&&window.navigator.maxTouchPoints>0)||
+      (window.matchMedia&&window.matchMedia('(pointer: coarse)').matches);
+  }
+  function publish(){
+    var value=(keyboardOpen||awaitingKeyboard)?'true':'false';
+    if(root.getAttribute('data-keyboard-open')!==value)root.setAttribute('data-keyboard-open',value);
+  }
+  function sync(){
+    queued=false;
+    var height=visibleHeight(),width=window.innerWidth||root.clientWidth;
+    var editing=isTextEditor(document.activeElement);
+    if(nativeKeyboardKnown){
+      keyboardOpen=nativeKeyboardVisible;
+      if(!keyboardOpen&&!awaitingKeyboard)fullHeight=height;
+      publish();return;
+    }
+    if(Math.abs(width-fullWidth)>64){
+      fullWidth=width;fullHeight=height;keyboardOpen=false;awaitingKeyboard=false;
+      clearTimeout(focusTimer);
+    }
+    var overlap=Math.max(0,fullHeight-height);
+    if(editing&&usesTouchKeyboard()&&overlap>Math.max(100,fullHeight*0.15)){
+      keyboardOpen=true;awaitingKeyboard=false;clearTimeout(focusTimer);
+    }else if(overlap<=2&&keyboardOpen){
+      keyboardOpen=false;awaitingKeyboard=false;clearTimeout(focusTimer);
+    }
+    if(!keyboardOpen&&!awaitingKeyboard&&(!editing||height>fullHeight))fullHeight=height;
+    publish();
+  }
+  function schedule(){if(!queued){queued=true;requestAnimationFrame(sync);}}
+  function prepare(el){
+    if(!isTextEditor(el)||!usesTouchKeyboard())return;
+    if(!keyboardOpen)fullHeight=Math.max(fullHeight,visibleHeight());
+    awaitingKeyboard=true;publish();clearTimeout(focusTimer);
+    focusTimer=setTimeout(function(){awaitingKeyboard=false;sync();},750);
+  }
+  document.addEventListener('focusin',function(){prepare(document.activeElement);});
+  document.addEventListener('touchstart',function(event){prepare(event.target);},{passive:true,capture:true});
+  document.addEventListener('focusout',function(){awaitingKeyboard=false;clearTimeout(focusTimer);schedule();});
+  window.addEventListener('resize',schedule);
+  window.addEventListener('pageshow',schedule);
+  if(viewport)viewport.addEventListener('resize',schedule);
+  publish();
+})();
+</script>
 </body>
 </html>
