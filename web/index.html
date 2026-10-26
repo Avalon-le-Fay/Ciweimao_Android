@@ -4095,6 +4095,7 @@ function openChapModal(bid,name){
   $('#chap-purchase-count').textContent='0 章';
   $('#chap-selected-count').textContent='0';
   $('#chap-available-balance').textContent='—';
+  $('#chap-modal-ok').disabled=true;
   m.inert=false;
   m.classList.add('show');m.setAttribute('aria-hidden','false');
   loadChapterTree(bid);
