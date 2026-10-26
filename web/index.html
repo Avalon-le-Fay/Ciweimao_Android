@@ -1957,27 +1957,22 @@ html[data-menu-style="static-pill"] .tabs .tab.active {
   <button class="btn btn-primary" id="btn-go" tabindex="-1">开始解密</button>
 </div>
 
-<div class="modal-mask" id="chap-modal" aria-hidden="true" inert>
-  <section class="modal chapter-modal" role="dialog" aria-modal="true">
-    <div class="modal-heading">
-      <div><span class="modal-eyebrow">下载范围</span><h3 id="chap-modal-title">指定章节下载</h3></div>
-      <button type="button" class="modal-close" id="chap-modal-close" aria-label="关闭章节选择">×</button>
-    </div>
-    <p class="sub" id="chap-modal-sub">选择需要下载的章节；不选=下载全书。</p>
+<div class="modal-mask" id="chap-modal" aria-hidden="true" hidden inert>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="chap-modal-title" aria-describedby="chap-modal-sub">
+    <div class="modal-handle" aria-hidden="true"></div>
+    <div class="modal-heading"><div><span class="modal-eyebrow">下载范围</span><h3 id="chap-modal-title" tabindex="-1">指定章节下载</h3></div><button type="button" class="modal-close" id="chap-modal-close" aria-label="关闭章节选择"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <p class="sub" id="chap-modal-sub">选择需要下载的章节，留空下载全书。</p>
     <div class="chapter-summary" id="chap-summary">正在读取目录与价格…</div>
     <div class="chapter-toolbar"><button type="button" class="chapter-select-all" id="chap-select-all">全选</button><span>选择分卷、章节组或单章</span></div>
     <div class="chapter-list" id="chap-list"><div class="empty">正在加载…</div></div>
     <div class="chapter-footer">
-      <div class="chapter-total">
-        <span>应付 <strong id="chap-selected-cost">0 币</strong></span>
-        <span>需购 <strong id="chap-purchase-count">0 章</strong></span>
-        <span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span>
-        <small>已选 <strong id="chap-selected-count">0</strong> 章</small>
-      </div>
+      <div class="chapter-total"><span>应付 <strong id="chap-selected-cost">0 币</strong></span><span>需购 <strong id="chap-purchase-count">0 章</strong></span><span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span><small>已选 <strong id="chap-selected-count">0</strong> 章</small></div>
+      <div class="chapter-afford is-idle" id="chap-afford" role="status" aria-live="polite">选择章节后这里会显示能不能买得起</div>
       <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button><button type="button" class="btn btn-primary btn-sm" id="chap-modal-ok" disabled>开始下载</button></div>
     </div>
   </section>
 </div>
+
 <!-- 通用确认框（替代原生 confirm） -->
 <div id="cfm-mask" role="dialog" aria-modal="true">
   <div class="cfm-box">
@@ -4083,42 +4078,9 @@ async function onlineDownload(bid, chapters, name, chapterIds){
   onlinePoll();
 }
 
-// ===== 指定章节弹窗（目录树）=====
-let _chapModalBid=null,_chapModalName='',_chapSeq=0,_chapData=null;
-function openChapModal(bid,name){
-  _chapModalBid=bid;_chapModalName=name||'';_chapData=null;
-  const m=$('#chap-modal'); if(!m)return;
-  $('#chap-modal-sub').textContent=(name?('《'+name+'》 · '):'')+'选择需要下载的章节；不选=下载全书。';
-  $('#chap-list').innerHTML='<div class="empty">正在加载…</div>';
-  $('#chap-summary').textContent='正在读取目录与价格…';
-  $('#chap-selected-cost').textContent='0 币';
-  $('#chap-purchase-count').textContent='0 章';
-  $('#chap-selected-count').textContent='0';
-  $('#chap-available-balance').textContent='—';
-  $('#chap-modal-ok').disabled=true;
-  m.inert=false;
-  m.classList.add('show');m.setAttribute('aria-hidden','false');
-  loadChapterTree(bid);
-}
-function closeChapModal(){
-  const m=$('#chap-modal'); if(!m)return;
-  m.classList.remove('show');m.setAttribute('aria-hidden','true');m.inert=true;
-  _chapModalBid=null;_chapData=null;
-}
-async function loadChapterTree(bid){
-  const seq=++_chapSeq;
-  try{
-    const r=await api('/api/online/chapter_selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({book_id:bid})});
-    if(seq!==_chapSeq)return;
-    if(!r||r.ok!==true)throw new Error((r&&r.error)||'读取目录失败');
-    _chapData=r;
-    renderChapterTree(r);
-  }catch(e){
-    if(seq!==_chapSeq)return;
-    $('#chap-list').innerHTML='<div class="empty">'+esc(e.message||'读取失败')+'</div>';
-    $('#chap-summary').textContent='目录读取失败';
-  }
-}
+// ===== 指定章节弹窗（完整搬运 cwm：分卷 / 章节组 / 单章）=====
+let _chapModalBid=null,_chapModalName='',_chapSeq=0,_chapSelectionData=null;
+function chapMoney(value){return Number(value||0).toLocaleString('zh-CN',{maximumFractionDigits:2});}
 function cwmCheckMarkup(shape){
   var square=shape==='square';
   var ring=square
@@ -4130,130 +4092,171 @@ function cwmCheckMarkup(shape){
     +'<path class="cwm-check-dash" fill="none" d="M16 26h20"/>'
     +'</svg>';
 }
-function costText(chapters){
-  var sum=0;
-  (chapters||[]).forEach(function(ch){
-    if(ch.owned||ch.pending||ch.unit_hlb==null)return;
-    var v=Number(ch.unit_hlb); if(v>0)sum+=v;
-  });
-  return sum>0?(sum.toLocaleString('zh-CN',{maximumFractionDigits:2})+' 币'):'免费';
+function openChapModal(bid,name){
+  _chapModalBid=bid;_chapModalName=name||'';
+  const m=$('#chap-modal'); if(!m)return;
+  $('#chap-modal-sub').textContent=(name?('《'+name+'》 · '):'')+'选择需要下载的章节，留空下载全书。';
+  $('#chap-list').innerHTML='<div class="empty">正在加载…</div>';
+  $('#chap-summary').textContent='正在读取目录与价格…';
+  const afford=$('#chap-afford');
+  if(afford){afford.className='chapter-afford is-idle';afford.textContent='选择章节后这里会显示能不能买得起';}
+  $('#chap-selected-count').textContent='0';
+  $('#chap-purchase-count').textContent='0 章';
+  $('#chap-selected-cost').textContent='0 币';
+  $('#chap-available-balance').textContent='—';
+  $('#chap-modal-ok').disabled=true;
+  m.hidden=false;m.inert=false;
+  void m.offsetWidth;
+  m.classList.add('show');
+  loadChapterTree(bid);
 }
-function renderChapterTree(data){
-  const list=$('#chap-list');
-  const divisions=data.divisions||[];
-  let html='',index=0;
-  divisions.forEach(function(vol,vi){
-    const chapters=vol.chapters||[];
-    if(!chapters.length)return;
-    const vname=vol.division_name||('第'+(vi+1)+'卷');
-    html+='<div class="chapter-level division-level" data-open="true">'
-      +'<div class="chapter-head division-head">'
-      +'<button type="button" class="chapter-caret" aria-label="展开或收起" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>'
-      +'<label class="chapter-check"><input type="checkbox" data-vol="'+vi+'">'+cwmCheckMarkup('round')+'</label>'
-      +'<span class="chapter-head-title">'+esc(vname)+'</span>'
-      +'<span class="chapter-head-total">'+costText(chapters)+'</span></div>'
-      +'<div class="chapter-children"><div>';
-    for(let offset=0;offset<chapters.length;offset+=10){
-      const group=chapters.slice(offset,offset+10);
-      const start=index+1;
-      html+='<div class="chapter-level group-level" data-open="false">'
-        +'<div class="chapter-head group-head">'
-        +'<button type="button" class="chapter-caret" aria-label="展开或收起" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>'
-        +'<label class="chapter-check"><input type="checkbox" data-group="'+vi+'-'+offset+'">'+cwmCheckMarkup('round')+'</label>'
-        +'<span class="chapter-head-title">第 '+start+'-'+(start+group.length-1)+' 章</span>'
-        +'<span class="chapter-head-total">'+costText(group)+'</span></div>'
-        +'<div class="chapter-children"><div>';
-      group.forEach(function(ch){
-        index+=1;
-        const price=(ch.pending||ch.unit_hlb==null)?null:Number(ch.unit_hlb);
-        const owned=!!ch.owned,pending=!!ch.pending;
-        const cls='chapter-row'+(owned?' is-owned':'')+(pending?' is-unreviewed':'');
-        const priceText=pending?'未审核':(owned?'已购':((price&&price>0)?(price+' 币'):'免费'));
-        html+='<label class="'+cls+'"><input type="checkbox" data-id="'+esc(ch.chapter_id||'')+'" data-price="'+(price==null?'':price)+'" data-owned="'+(owned?'1':'0')+'" data-pending="'+(pending?'1':'0')+'">'
-          +cwmCheckMarkup('square')
-          +'<span class="chapter-title">'+esc(ch.chapter_title||('第 '+index+' 章'))+'</span>'
-          +'<span class="chapter-price">'+esc(priceText)+'</span></label>';
-      });
-      html+='</div></div>';
-    }
-    html+='</div></div></div>';
-  });
-  list.innerHTML=html||'<div class="empty">没有可下载的章节</div>';
-  list.querySelectorAll('.chapter-caret').forEach(function(btn){
-    btn.addEventListener('click',function(e){
-      e.preventDefault();e.stopPropagation();
-      const level=btn.closest('.chapter-level');
-      const open=level.dataset.open!=='true';
-      level.dataset.open=open?'true':'false';
-      btn.setAttribute('aria-expanded',open?'true':'false');
-    });
-  });
-  list.onchange=function(e){
-    const input=e.target;
-    if(!input||input.tagName!=='INPUT')return;
-    if(input.dataset.vol!=null||input.dataset.group!=null){
-      const level=input.closest('.chapter-level');
-      level.querySelectorAll('input[data-id]').forEach(function(x){x.checked=input.checked;});
-    }
-    syncTreeChecks();
-    updateChapSummary();
-  };
-  syncTreeChecks();
-  updateChapSummary();
+function closeChapModal(){
+  const m=$('#chap-modal'); if(!m)return;
+  _chapModalBid=null;
+  if(!m.classList.contains('show')){m.hidden=true;m.inert=true;return;}
+  m.classList.remove('show');
+  m.classList.add('is-closing');
+  clearTimeout(closeChapModal._timer);
+  closeChapModal._timer=setTimeout(function(){
+    m.classList.remove('is-closing');
+    m.hidden=true;m.inert=true;
+  },220);
 }
-function syncTreeChecks(){
-  const list=$('#chap-list'); if(!list)return;
-  list.querySelectorAll('.group-level').forEach(function(g){
-    const boxes=Array.prototype.slice.call(g.querySelectorAll('input[data-id]'));
-    const on=boxes.filter(function(b){return b.checked;}).length;
-    const head=g.querySelector('.chapter-head input[data-group]');
-    if(head){head.checked=on>0&&on===boxes.length;head.indeterminate=on>0&&on<boxes.length;}
-  });
-  list.querySelectorAll('.division-level').forEach(function(v){
-    const boxes=Array.prototype.slice.call(v.querySelectorAll('input[data-id]'));
-    const on=boxes.filter(function(b){return b.checked;}).length;
-    const head=v.querySelector('.chapter-head input[data-vol]');
-    if(head){head.checked=on>0&&on===boxes.length;head.indeterminate=on>0&&on<boxes.length;}
-  });
-}
-function updateChapSummary(){
-  const boxes=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]:checked'));
-  let cost=0,need=0;
-  boxes.forEach(function(b){
-    const price=b.dataset.price===''?null:Number(b.dataset.price);
-    if(b.dataset.owned!=='1'&&price&&price>0){cost+=price;need+=1;}
-  });
-  const money=function(v){return Number(v||0).toLocaleString('zh-CN',{maximumFractionDigits:2});};
-  $('#chap-selected-count').textContent=String(boxes.length);
-  $('#chap-selected-cost').textContent=money(cost)+' 币';
-  $('#chap-purchase-count').textContent=need+' 章';
-  const bal=_chapData&&_chapData.balance!=null?Number(_chapData.balance):null;
-  $('#chap-available-balance').textContent=bal==null?'—':money(bal)+' 币';
-  const okBtn=$('#chap-modal-ok');
-  if(okBtn){okBtn.disabled=boxes.length===0;okBtn.textContent=cost>0?'订阅并下载':'开始下载';}
-  const all=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]'));
-  const allBtn=$('#chap-select-all');
-  if(allBtn)allBtn.textContent=(all.length>0&&all.every(function(b){return b.checked;}))?'取消全选':'全选';
-  if(_chapData){
-    $('#chap-summary').textContent='共 '+_chapData.total+' 章 · 已购 '+_chapData.owned+' · 免费 '+_chapData.free+' · 需购 '+_chapData.pending+' · 未审核 '+_chapData.unreviewed;
+async function loadChapterTree(bid){
+  const seq=++_chapSeq;
+  try{
+    const r=await api('/api/online/chapter_selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({book_id:bid})});
+    if(seq!==_chapSeq)return;
+    if(!r||r.ok!==true)throw new Error((r&&r.error)||'读取目录失败');
+    _chapSelectionData=r;
+    renderChapterSelection(r);
+  }catch(e){
+    if(seq!==_chapSeq)return;
+    $('#chap-list').innerHTML='<div class="empty">'+esc(e.message||'读取失败')+'</div>';
+    $('#chap-summary').textContent='目录读取失败';
   }
+}
+function renderChapterSelection(data){
+  const list=$('#chap-list'), summary=$('#chap-summary');
+  const selectedCount=$('#chap-selected-count'), purchaseCount=$('#chap-purchase-count'), selectedCost=$('#chap-selected-cost'), availableBalance=$('#chap-available-balance'), downloadButton=$('#chap-modal-ok');
+  const divisions=data.divisions||[]; let sequence=0, total=0, owned=0, free=0, unreviewed=0;
+  const volumeGroups=[];
+  divisions.forEach(function(volume,volumeIndex){
+    const chapters=volume.chapters||[], groups=[];
+    for(let offset=0;offset<chapters.length;offset+=10){
+      const items=chapters.slice(offset,offset+10).map(function(chapter){
+        sequence+=1; total+=1;
+        const item=Object.assign({},chapter,{sequence:sequence,owned:!!chapter.owned,pending:!!chapter.pending,price:chapter.pending?0:(Number(chapter.unit_hlb)||0),rawPrice:chapter.unit_hlb==null?'':String(chapter.unit_hlb)});
+        if(item.pending)unreviewed+=1; else if(item.owned)owned+=1; else if(!item.price)free+=1;
+        return item;
+      });
+      if(items.length)groups.push({startSequence:items[0].sequence,items:items});
+    }
+    volumeGroups.push({name:volume.division_name||('第'+(volumeIndex+1)+'卷'),groups:groups});
+  });
+  const CARET_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+  function setDisclosure(panel,button,open){
+    button.setAttribute('aria-expanded',String(open));
+    var level=panel.parentNode;
+    if(level&&level.classList.contains('chapter-level'))level.dataset.open=String(open);
+  }
+  var _chapAnimTimer=null;
+  function markChapterAnimating(){
+    document.documentElement.setAttribute('data-overlay-animating','true');
+    clearTimeout(_chapAnimTimer);
+    _chapAnimTimer=setTimeout(function(){document.documentElement.removeAttribute('data-overlay-animating');},320);
+  }
+  function wireDisclosure(section,defaultOpen){
+    const panel=section.querySelector('.chapter-children'),button=section.querySelector('.chapter-head .chapter-caret');
+    if(!panel||!button)return;
+    setDisclosure(panel,button,!!defaultOpen);
+    button.addEventListener('click',function(){
+      const open=section.dataset.open!=='false';
+      setDisclosure(panel,button,!open);
+      markChapterAnimating();
+    });
+  }
+  function amountOf(value){
+    if(value==null)return null;
+    const raw=String(value).trim();
+    return /^[0-9]+(?:\.[0-9]+)?$/.test(raw)&&raw.length<=64?Number(raw):null;
+  }
+  /* 320 是单账号：余额直接用 chapter_selection 返回的 balance。 */
+  function renderAfford(amount,purchase){
+    const box=$('#chap-afford'); if(!box)return;
+    const balance=amountOf(data.balance);
+    if(availableBalance)availableBalance.textContent=balance==null?'—':chapMoney(balance)+' 币';
+    if(!purchase){box.className='chapter-afford is-idle';box.textContent='所选章节都已拥有或免费，无需购章';return;}
+    if(balance==null){box.className='chapter-afford is-unknown';box.textContent='余额未知，无法判断能不能买齐';return;}
+    if(balance>=amount){
+      box.className='chapter-afford is-ok';
+      box.innerHTML='余额够 <span class="afford-detail">应付 '+chapMoney(amount)+' 币，余额 '+chapMoney(balance)+' 币'+(balance-amount>0?'，结余 '+chapMoney(balance-amount)+' 币':'，刚好够')+'</span>';
+    }else{
+      box.className='chapter-afford is-short';
+      box.innerHTML='余额不足 <span class="afford-detail">应付 '+chapMoney(amount)+' 币，余额 '+chapMoney(balance)+' 币，还差 '+chapMoney(amount-balance)+' 币</span>';
+    }
+  }
+  function update(){
+    const checked=Array.prototype.slice.call(list.querySelectorAll('input[data-chapter-seq]:checked')); let amount=0;
+    checked.forEach(function(input){amount+=Number(input.closest('.chapter-row').dataset.price)||0;});
+    const purchase=checked.filter(function(input){return Number(input.closest('.chapter-row').dataset.price)>0;}).length;
+    summary.textContent='共 '+total+' 章 · 已购 '+owned+' · 免费 '+free+(unreviewed?' · 未审核 '+unreviewed:'')+' · 待购 '+(total-owned-free-unreviewed)+' · 已选 '+checked.length+' 章';
+    selectedCount.textContent=String(checked.length);
+    purchaseCount.textContent=String(purchase)+' 章';
+    selectedCost.textContent=chapMoney(amount)+' 币';
+    downloadButton.disabled=checked.length===0;
+    downloadButton.textContent=amount>0?'订阅并下载':'开始下载';
+    renderAfford(amount,purchase);
+    list.querySelectorAll('input[data-group-check]').forEach(function(box){const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-parent="'+box.dataset.groupCheck+'"]'));box.checked=rows.length>0&&rows.every(function(row){return row.checked;});box.indeterminate=rows.some(function(row){return row.checked;})&&!box.checked;});
+    list.querySelectorAll('input[data-division-check]').forEach(function(box){const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-division="'+box.dataset.divisionCheck+'"]'));box.checked=rows.length>0&&rows.every(function(row){return row.checked;});box.indeterminate=rows.some(function(row){return row.checked;})&&!box.checked;});
+    const all=list.querySelectorAll('input[data-chapter-seq]');
+    $('#chap-select-all').textContent=all.length&&checked.length===all.length?'取消全选':'全选';
+    list.querySelectorAll('[data-group-total]').forEach(function(node){node.textContent=node.dataset.totalPrice==='0'?'免费':chapMoney(node.dataset.totalPrice)+'币';});
+    list.querySelectorAll('[data-division-total]').forEach(function(node){node.textContent=node.dataset.totalPrice==='0'?'免费':chapMoney(node.dataset.totalPrice)+'币';});
+  }
+  list.innerHTML=''; let volumeIndex=0;
+  volumeGroups.forEach(function(volume){
+    const divisionKey='volume-'+volumeIndex++, division=document.createElement('section'); division.className='chapter-level division-level';
+    const volumeCost=volume.groups.reduce(function(sum,group){return sum+group.items.reduce(function(value,item){return value+(item.owned?0:item.price);},0);},0);
+    division.innerHTML='<div class="chapter-head division-head"><button type="button" class="chapter-caret" aria-expanded="true">'+CARET_SVG+'</button><strong>'+esc(volume.name)+'</strong><span class="chapter-head-total" data-division-total data-total-price="'+volumeCost+'"></span><label class="chapter-check" aria-label="选择'+esc(volume.name)+'"><input type="checkbox" data-division-check="'+divisionKey+'">'+cwmCheckMarkup('round')+'</label></div><div class="chapter-children"><div class="cc-inner"></div></div>';
+    const divisionChildren=division.querySelector('.chapter-children>.cc-inner');
+    volume.groups.forEach(function(group){
+      const groupKey=divisionKey+'-group-'+group.startSequence, section=document.createElement('section'); section.className='chapter-level group-level';
+      const groupCost=group.items.reduce(function(sum,item){return sum+(item.owned?0:item.price);},0);
+      const first=group.items[0];
+      section.innerHTML='<div class="chapter-head group-head"><button type="button" class="chapter-caret" aria-expanded="false">'+CARET_SVG+'</button><span>'+esc(first.chapter_title||('第'+first.sequence+'章'))+' <em>（共'+group.items.length+'章）</em></span><span class="chapter-head-total" data-group-total data-total-price="'+groupCost+'"></span><label class="chapter-check" aria-label="选择第'+first.sequence+'章组"><input type="checkbox" data-group-check="'+groupKey+'">'+cwmCheckMarkup('round')+'</label></div><div class="chapter-children"><div class="cc-inner"></div></div>';
+      const groupChildren=section.querySelector('.chapter-children>.cc-inner');
+      group.items.forEach(function(item){
+        const row=document.createElement('label'); row.className='chapter-row '+(item.owned?'is-owned ':'')+(item.pending?'is-unreviewed ':'');
+        row.dataset.price=item.owned?'0':String(item.price);
+        row.dataset.chapterId=String(item.chapter_id||'');
+        row.innerHTML='<input type="checkbox" data-chapter-seq="'+item.sequence+'" data-chapter-id="'+esc(String(item.chapter_id||''))+'" data-parent="'+groupKey+'" data-division="'+divisionKey+'">'+cwmCheckMarkup('square')+'<span class="chapter-title">'+esc(item.chapter_title||('第'+item.sequence+'章'))+'</span><span class="chapter-price">'+(item.pending?'未审核':(item.owned?'已购':(item.price?chapMoney(item.price)+'币':'免费')))+'</span>';
+        groupChildren.appendChild(row);
+      });
+      divisionChildren.appendChild(section); wireDisclosure(section,false);
+      section.querySelector('input[data-group-check]').addEventListener('change',function(event){const checked=event.currentTarget.checked;list.querySelectorAll('input[data-parent="'+groupKey+'"]').forEach(function(input){input.checked=checked;});update();});
+    });
+    list.appendChild(division); wireDisclosure(division,true);
+    division.querySelector('input[data-division-check]').addEventListener('change',function(event){const checked=event.currentTarget.checked;list.querySelectorAll('input[data-division="'+divisionKey+'"]').forEach(function(input){input.checked=checked;});update();});
+  });
+  list.addEventListener('change',function(event){if(event.target.matches('input[data-chapter-seq]'))update();});
+  list._chapterUpdate=update;
+  update();
 }
 $('#chap-modal-close').onclick=closeChapModal;
 $('#chap-modal-cancel').onclick=closeChapModal;
 $('#chap-modal').onclick=function(e){ if(e.target&&e.target.id==='chap-modal') closeChapModal(); };
 $('#chap-select-all').onclick=function(){
-  const boxes=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]'));
-  if(!boxes.length)return;
-  const all=boxes.every(function(b){return b.checked;});
-  boxes.forEach(function(b){b.checked=!all;});
-  syncTreeChecks();updateChapSummary();
+  const inputs=Array.prototype.slice.call($('#chap-list').querySelectorAll('input[data-chapter-seq]'));
+  const all=inputs.length>0&&inputs.every(function(x){return x.checked;});
+  inputs.forEach(function(x){x.checked=!all;});
+  if($('#chap-list')._chapterUpdate)$('#chap-list')._chapterUpdate();
 };
 $('#chap-modal-ok').onclick=function(){
-  const bid=_chapModalBid,name=_chapModalName;
-  const ids=Array.prototype.slice.call(document.querySelectorAll('#chap-list input[data-id]:checked'))
-    .map(function(b){return b.dataset.id;}).filter(Boolean);
+  const bid=_chapModalBid, name=_chapModalName;
+  const chapterIds=Array.prototype.slice.call($('#chap-list').querySelectorAll('input[data-chapter-id]:checked')).map(function(x){return x.dataset.chapterId;}).filter(Boolean);
   closeChapModal();
-  if(bid)onlineDownload(bid,'',name,ids);
+  if(bid&&chapterIds.length)onlineDownload(bid,'',name,chapterIds);
 };
 const _outputsSyncedForDoneTasks=new Set();
 let onlinePollTimer=null,onlinePollResume=null;
@@ -5090,43 +5093,88 @@ img.cover{cursor:zoom-in}
 
 </style>
 <style>
-/* ===== 指定章节：目录树 ===== */
-.chapter-modal{max-width:430px;max-height:86vh;display:flex;flex-direction:column;padding:18px 18px 0}
-.chapter-modal .modal-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:2px}
-.modal-eyebrow{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--blue);opacity:.9}
-.modal-close{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;background:var(--card2);color:var(--gray);font-size:20px;line-height:1;cursor:pointer}
-.modal-close:active{transform:scale(.94)}
-.chapter-summary{padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13px;line-height:1.5;color:var(--white)}
-.chapter-toolbar{display:flex;align-items:center;gap:8px;padding:10px 0 6px;color:var(--gray);font-size:12px}
-.chapter-select-all{border:0;padding:4px 0;background:none;color:var(--blue);font:600 13px inherit;cursor:pointer}
-.chapter-list{flex:1 1 auto;min-height:0;max-height:52vh;overflow:auto;margin:0 -18px;padding:0 18px;border-top:1px solid rgba(120,130,145,.18)}
-.chapter-list .empty{padding:24px 0;text-align:center;color:var(--gray);font-size:13px}
-.chapter-level{border-bottom:1px solid rgba(120,130,145,.18)}
-.chapter-head{display:flex;align-items:center;gap:8px;min-height:46px;padding:6px 0;color:var(--white);font-size:15px}
-.chapter-head-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.division-head{font-size:16px;font-weight:650;color:var(--blue)}
-.group-head{padding-left:18px;font-size:14px}
-.chapter-head-total{color:var(--gray);font-size:12px;white-space:nowrap}
-.chapter-caret{flex:0 0 auto;width:24px;height:28px;border:0;padding:0;background:none;color:var(--gray);cursor:pointer;display:grid;place-items:center;transition:transform .2s var(--ease-out)}
-.chapter-caret svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.chapter-level[data-open="true"]>.chapter-head .chapter-caret{transform:rotate(90deg)}
-.chapter-children{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s var(--ease-out)}
-.chapter-level[data-open="true"]>.chapter-children{grid-template-rows:1fr}
-.chapter-children>div{overflow:hidden;min-height:0}
-.chapter-check{flex:0 0 auto;display:grid;place-items:center;width:24px;height:24px}
-.chapter-check input,.chapter-row input{width:18px;height:18px;margin:0;accent-color:var(--blue)}
-.chapter-row{display:flex;align-items:center;gap:8px;min-height:42px;padding:6px 0 6px 50px;border-bottom:1px solid rgba(120,130,145,.10);font-size:13px;color:var(--white);cursor:pointer}
-.chapter-row:last-child{border-bottom:0}
-.chapter-row.is-owned{opacity:.6}
-.chapter-row.is-unreviewed .chapter-price{color:var(--gray)}
-.chapter-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chapter-price{flex:0 0 auto;color:var(--blue);font-size:12px;white-space:nowrap}
-.chapter-footer{position:sticky;bottom:0;margin:0 -18px;padding:10px 18px calc(12px + var(--safe-bottom));border-top:1px solid rgba(120,130,145,.18);background:var(--card)}
-.chapter-total{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px;color:var(--gray);font-size:12px;flex-wrap:wrap}
-.chapter-total strong,.chapter-total b{color:var(--white);font-weight:650}
-.chapter-total b{color:var(--blue)}
-@media (prefers-reduced-motion:reduce){.chapter-children,.chapter-caret{transition:none}}
-
+/* ===== 指定章节：底部抽屉（完整搬运 cwm_download_web） ===== */
+#chap-modal{
+  --dur-overlay-in:.32s;--dur-overlay-out:.2s;--ease-drawer:cubic-bezier(.32,.72,0,1);
+  --chapter-blue:#0066cc;--chapter-focus:#0071e3;--chapter-hairline:rgba(0,0,0,.09);
+  position:fixed;inset:0;z-index:140;display:flex;align-items:flex-end;justify-content:center;
+  padding:calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
+  isolation:isolate;pointer-events:none;visibility:hidden;overscroll-behavior:contain;
+  background:none;opacity:1;transition:none;
+}
+#chap-modal[hidden]{display:none!important}
+#chap-modal::before{content:'';position:absolute;inset:0;z-index:-1;background:rgba(16,22,32,.42);opacity:0;transition:opacity var(--dur-overlay-out) var(--ease-out)}
+#chap-modal.show,#chap-modal.is-closing{visibility:visible}
+#chap-modal.show{pointer-events:auto}
+#chap-modal.show::before{opacity:1;transition-duration:var(--dur-overlay-in)}
+#chap-modal .modal{width:100%;max-width:520px;max-height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:14px 20px 0;border:1px solid rgba(120,130,145,.18);border-radius:28px;background:#fff;color:#1d1d1f;box-shadow:0 18px 50px rgba(0,0,0,.18);opacity:0;transform:translate3d(0,calc(100% + 12px + var(--safe-bottom)),0);transition:transform var(--dur-overlay-in) var(--ease-drawer),opacity var(--dur-overlay-in) var(--ease-out)}
+#chap-modal.show .modal{opacity:1;transform:translate3d(0,0,0)}
+#chap-modal.is-closing .modal{transition:transform var(--dur-overlay-out) cubic-bezier(.4,0,1,1),opacity var(--dur-overlay-out) var(--ease-out)}
+#chap-modal .modal-handle{width:34px;height:4px;border-radius:4px;background:#d2d2d7;opacity:.9;margin:0 auto 16px}
+#chap-modal .modal-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;padding:4px 0 0;border:0}
+#chap-modal .modal-eyebrow{display:block;font-family:SF Pro Text,system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;letter-spacing:-.1px;color:var(--chapter-blue);margin-bottom:4px}
+#chap-modal .modal-heading h3{font-family:SF Pro Display,system-ui,-apple-system,sans-serif;font-size:24px;font-weight:600;letter-spacing:-.38px;line-height:1.2;margin:3px 0;color:#1d1d1f}
+#chap-modal .modal-close{display:grid;place-items:center;width:44px;height:44px;min-width:44px;padding:0;border:0;border-radius:50%;background:#f5f5f7;color:#6e6e73;box-shadow:none;cursor:pointer;transition:transform .16s cubic-bezier(.23,1,.32,1),background-color .16s ease}
+#chap-modal .modal-close:active{transform:scale(.94)}
+#chap-modal .modal-close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+#chap-modal .sub{margin:10px 0 16px;color:#6e6e73;font-size:15px;line-height:1.45;letter-spacing:-.2px;overflow-wrap:anywhere}
+#chap-modal .chapter-summary{padding:13px 15px;border-radius:16px;background:#f5f5f7;color:#1d1d1f;font-family:SF Pro Text,system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.45;letter-spacing:-.18px}
+#chap-modal .chapter-toolbar{display:flex;align-items:center;gap:8px;padding:14px 0 8px;color:#6e6e73;font-size:13px}
+#chap-modal .chapter-select-all{border:0;padding:5px 0;background:none;color:var(--chapter-blue);font:600 14px SF Pro Text,system-ui,sans-serif;cursor:pointer}
+#chap-modal .chapter-list{max-height:52vh;margin:0 -20px;padding:0 20px;overflow:auto;background:#fff}
+#chap-modal .chapter-list .empty{padding:24px 0;text-align:center;color:#86868b;font-size:13px}
+#chap-modal .chapter-level{border-bottom:1px solid var(--chapter-hairline)}
+#chap-modal .chapter-head{display:flex;align-items:center;gap:8px;min-height:49px;padding:7px 0;color:#1d1d1f;font-family:SF Pro Text,system-ui,-apple-system,sans-serif}
+#chap-modal .division-head{font-size:17px;font-weight:600;color:var(--chapter-blue);letter-spacing:-.25px}
+#chap-modal .group-head{min-height:45px;padding-left:18px;font-size:15px;font-weight:400;letter-spacing:-.22px}
+#chap-modal .group-head em{font-style:normal;color:#86868b;font-size:13px}
+#chap-modal .chapter-head-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chap-modal .chapter-head-total{margin-left:auto;color:var(--chapter-blue);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#chap-modal .chapter-caret{border:0;background:none;color:#86868b;width:20px;height:28px;padding:0;font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:transform .2s var(--ease-out)}
+#chap-modal .chapter-caret svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#chap-modal .chapter-level[data-open="true"]>.chapter-head .chapter-caret{transform:rotate(90deg)}
+#chap-modal .chapter-children{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s var(--ease-out)}
+#chap-modal .chapter-level[data-open="true"]>.chapter-children{grid-template-rows:1fr}
+#chap-modal .chapter-children>div{overflow:hidden;min-height:0}
+#chap-modal .chapter-check{width:28px;height:28px;margin-left:4px;display:grid;place-items:center;position:relative}
+#chap-modal .chapter-check input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;pointer-events:none}
+#chap-modal .chapter-check .cwm-check{width:22px;height:22px;flex:0 0 22px}
+#chap-modal .cwm-check{--blue:var(--chapter-blue);--accent-fg:#fff}
+#chap-modal .chapter-row{position:relative;display:flex;align-items:center;gap:8px;min-height:43px;padding:7px 0 7px 57px;border-bottom:0;color:#1d1d1f;font:400 14px/1.35 SF Pro Text,system-ui,-apple-system,sans-serif;letter-spacing:-.18px;cursor:pointer}
+#chap-modal .chapter-row>input[type=checkbox]{position:absolute;width:1px;height:1px;margin:0;opacity:0;pointer-events:none}
+#chap-modal .chapter-row .cwm-check{width:18px;height:18px;flex:0 0 18px;margin-right:2px}
+#chap-modal .chapter-row.is-owned{opacity:.58}
+#chap-modal .chapter-row.is-unreviewed .chapter-price{color:#8e8e93}
+#chap-modal .chapter-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#chap-modal .chapter-price{color:var(--chapter-blue);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#chap-modal .chapter-footer{position:sticky;bottom:0;margin:0 -20px;padding:12px 20px calc(12px + var(--safe-bottom));border-top:1px solid rgba(0,0,0,.08);background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#chap-modal .chapter-total{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:baseline;margin-bottom:9px;color:#6e6e73;font-size:13px}
+#chap-modal .chapter-total span,#chap-modal .chapter-total small{white-space:nowrap}
+#chap-modal .chapter-total strong,#chap-modal .chapter-total b{color:#1d1d1f;font-weight:600}
+#chap-modal .chapter-total b{color:var(--chapter-blue)}
+@media(max-width:420px){#chap-modal .chapter-total{grid-template-columns:1fr 1fr;row-gap:4px}#chap-modal .chapter-total small{grid-column:1/-1}}
+#chap-modal .chapter-afford{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:8px 0 0;font-size:13px;line-height:1.45;font-weight:600;color:#6e6e73}
+#chap-modal .chapter-afford strong{font-weight:700}
+#chap-modal .chapter-afford .afford-detail{flex-basis:100%;font-weight:400;font-size:12px;color:#8e8e93;overflow-wrap:anywhere;white-space:pre-line}
+#chap-modal .chapter-afford.is-ok{color:#1d8f4e}
+#chap-modal .chapter-afford.is-short{color:#c93400}
+#chap-modal .chapter-afford.is-unknown{color:#8e8e93}
+#chap-modal .chapter-afford.is-idle{color:#8e8e93;font-weight:400}
+#chap-modal .chapter-footer .row{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
+#chap-modal .chapter-footer .btn{flex:1;min-height:44px;border-radius:999px;font-size:15px;font-weight:600;letter-spacing:-.2px;padding:12px}
+#chap-modal .chapter-footer .btn-primary{flex:1.65;background:var(--chapter-blue);color:#fff;border-color:var(--chapter-blue)}
+#chap-modal .chapter-footer .btn-primary:disabled{background:#d2d2d7;border-color:#d2d2d7;color:#86868b;opacity:1}
+#chap-modal .chapter-footer .btn-ghost{background:#f5f5f7;color:#1d1d1f;border-color:transparent}
+html[data-theme="dark"] #chap-modal .modal{background:#1d1d1f;color:#f5f5f7}
+html[data-theme="dark"] #chap-modal .chapter-list{background:#1d1d1f}
+html[data-theme="dark"] #chap-modal .chapter-head,html[data-theme="dark"] #chap-modal .chapter-row,html[data-theme="dark"] #chap-modal .chapter-total strong{color:#f5f5f7}
+html[data-theme="dark"] #chap-modal .chapter-summary,html[data-theme="dark"] #chap-modal .chapter-footer{background:rgba(39,39,41,.94)}
+html[data-theme="dark"] #chap-modal .chapter-summary{color:#f5f5f7}
+html[data-theme="dark"] #chap-modal .chapter-footer .btn-ghost{background:#2a2a2c;color:#f5f5f7}
+html[data-theme="dark"] #chap-modal .chapter-afford.is-ok{color:#4cd07d}
+html[data-theme="dark"] #chap-modal .chapter-afford.is-short{color:#ff7a59}
+html[data-theme="dark"] #chap-modal .chapter-afford.is-unknown,html[data-theme="dark"] #chap-modal .chapter-afford.is-idle{color:#98989d}
+@media (prefers-reduced-motion:reduce){#chap-modal .modal,#chap-modal .chapter-children,#chap-modal .chapter-caret{transition:none!important}}
 </style>
 
 <script>
