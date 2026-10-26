@@ -4846,6 +4846,7 @@ select.addEventListener('focus',load);select.addEventListener('pointerdown',load
 })();
 </script>
 
+<style>
 /* ===== 标题栏：页签标题 + 版本/更新状态 ===== */
 .titlebar{--tb-ok:#1a7f37;--tb-warn:#b26a00}
 @media (prefers-color-scheme:dark){ .titlebar{--tb-ok:#5ddc8b;--tb-warn:#ffb340} }
@@ -4881,6 +4882,7 @@ html[data-theme="dark"] #accent-picker-open{background:transparent;border-color:
 .accent-trigger-dot{width:17px;height:17px;box-shadow:none;border:2px solid color-mix(in srgb,var(--blue) 55%,transparent);background:color-mix(in srgb,var(--blue) 22%,transparent)}
 
 
+</style>
 <script>
 /* ===== 标题栏：版本号 + 检查更新（公开 Release 的 Latest） ===== */
 (function(){
@@ -4960,6 +4962,7 @@ html[data-theme="dark"] #accent-picker-open{background:transparent;border-color:
 </script>
 
 
+<style>
 /* ===== 封面：点开看原图，图下方圆形按钮下载（走原生 SAF 目录） ===== */
 img.cover{cursor:zoom-in}
 #cover-viewer{position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;
@@ -4997,6 +5000,7 @@ img.cover{cursor:zoom-in}
 @media(prefers-reduced-motion:reduce){#cover-viewer,#cover-viewer img,.cover-viewer-dl{transition:none}}
 
 
+</style>
 <div id="cover-viewer" aria-hidden="true">
   <img id="cover-viewer-img" alt="">
   <button class="cover-viewer-dl" id="cover-viewer-dl" type="button" aria-label="下载封面" title="下载封面"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>
@@ -5045,6 +5049,7 @@ img.cover{cursor:zoom-in}
 </script>
 
 
+<style>
 /* 悬浮批量条收起：保持 220ms 先淡出+上移，再移除 show（避免直接跳没） */
 #out-floatbar{transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
 #out-floatbar-slot.is-closing{pointer-events:none}
@@ -5053,6 +5058,8 @@ img.cover{cursor:zoom-in}
 @media(prefers-reduced-motion:reduce){#out-floatbar{transition:none}}
 
 
+</style>
+<style>
 /* ===== 指定章节：目录树 ===== */
 .chapter-modal{max-width:430px;max-height:86vh;display:flex;flex-direction:column;padding:18px 18px 0}
 .chapter-modal .modal-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:2px}
@@ -5090,5 +5097,6 @@ img.cover{cursor:zoom-in}
 .chapter-total b{color:var(--blue)}
 @media (prefers-reduced-motion:reduce){.chapter-children,.chapter-caret{transition:none}}
 
+</style>
 </body>
 </html>
