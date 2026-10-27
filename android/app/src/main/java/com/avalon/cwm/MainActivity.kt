@@ -82,6 +82,10 @@ class MainActivity : AppCompatActivity() {
     @Volatile
     private var trustedBridgePage = false
 
+    /** 网页侧是否有浮层打开；返回键只看这个，不依赖 evaluateJavascript 的返回值。 */
+    @Volatile
+    private var webOverlayOpen = false
+
     private var storageDialogShown = false
 
     private var exitDialog: AlertDialog? = null
@@ -540,6 +544,13 @@ class MainActivity : AppCompatActivity() {
             AppSettings.setLanAccess(this@MainActivity, enabled)
         }
 
+        /** 网页浮层开关时同步过来，供返回键判断。 */
+        @JavascriptInterface
+        fun setOverlayOpen(open: Boolean) {
+            if (destroyed || !trustedBridgePage) return
+            webOverlayOpen = open
+        }
+
         /** 保存封面到「导出文件」用的 SAF 目录；没选过目录会先弹系统选择器。 */
         @JavascriptInterface
         fun saveCoverImage(url: String, baseName: String) {
@@ -819,6 +830,16 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
                 if (trustedBridgePage) {
+                    // 网页报过「有浮层」就直接让它关，不依赖 evaluateJavascript 的返回值
+                    // （实测返回值经常拿不到 "true"，导致返回键永远弹退出框）。
+                    if (webOverlayOpen) {
+                        webOverlayOpen = false
+                        webView.evaluateJavascript(
+                            "window.cwmDismissTopOverlay && window.cwmDismissTopOverlay();",
+                            null,
+                        )
+                        return
+                    }
                     webView.evaluateJavascript(
                         "Boolean(window.cwmDismissTopOverlay && window.cwmDismissTopOverlay())",
                     ) { handled ->

@@ -2215,10 +2215,10 @@ html[data-theme="dark"] .fr-card{background:color-mix(in srgb,var(--card) 97%,tr
         <button class="btn btn-primary auth-submit" id="btn-code-login" type="button">短信验证码登录</button>
       </div>
       <div class="lpanel" id="l-token">
-        <div class="auth-panel-note">使用 <code>app1.happybooker.cn</code>，Token 导入还需要 reader_id；shelf_id 可自动发现。</div>
+        <div class="auth-panel-note">2.9.365 / 2.9.366 使用 <code>app1.happybooker.cn</code>，reader_id / shelf_id 可留空，登录后自动获取。</div>
         <div class="auth-field"><input type="text" id="on-account" placeholder=" " autocomplete="off"><label for="on-account">account（昵称）</label></div>
         <div class="auth-field"><input type="text" id="on-token" placeholder=" " autocomplete="off"><label for="on-token">login_token（32 位）</label></div>
-        <div class="auth-field"><input type="text" id="on-reader-id" placeholder=" " inputmode="numeric" autocomplete="off"><label for="on-reader-id">reader_id（2.9.365 / 2.9.366 必填）</label></div>
+        <div class="auth-field"><input type="text" id="on-reader-id" placeholder=" " inputmode="numeric" autocomplete="off"><label for="on-reader-id">reader_id（可留空自动获取）</label></div>
         <div class="auth-field"><input type="text" id="on-shelf-id" placeholder=" " inputmode="numeric" autocomplete="off"><label for="on-shelf-id">shelf_id（可留空自动获取）</label></div>
         <button class="btn btn-primary auth-submit" id="btn-login">使用 Token 登录</button>
       </div>
@@ -4222,7 +4222,6 @@ $('#btn-login').onclick=async()=>{
   const shelf_id=$('#on-shelf-id').value.trim();
   const ver=$('#on-ver').value.trim();
   if(!account||!token){ toast('请填 account 和 login_token'); return; }
-  if(['2.9.365','2.9.366'].includes(ver)&&!reader_id){ toast('2.9.365 / 2.9.366 Token 登录还需要 reader_id'); return; }
   const b=$('#btn-login'); b.disabled=true; b.textContent='登录中...';
   try{
     const r=await authApi('/api/online/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(authPayload({account,login_token:token,reader_id,shelf_id}))});
@@ -5548,7 +5547,13 @@ select.addEventListener('focus',load);select.addEventListener('pointerdown',load
   }
   document.addEventListener('click',function(e){
     var cover=e.target&&e.target.closest?e.target.closest('img.cover'):null;
-    if(cover){e.stopPropagation();e.preventDefault();open(cover.currentSrc||cover.src,cover.dataset.coverName||'');return;}
+    if(cover){
+      e.stopPropagation();e.preventDefault();
+      // 与 cwm 一致：书名取卡片上的 data-name，取不到再退回图片自身的 data-cover-name
+      var card=cover.closest('.card');
+      open(cover.currentSrc||cover.src,(card&&card.dataset.name)||cover.dataset.coverName||'');
+      return;
+    }
   },true);
   box.addEventListener('click',function(e){
     if(e.target.closest('#cover-viewer-img'))return;   // 点图片本身不关
@@ -5856,6 +5861,39 @@ window.cwmDismissTopOverlay=function(){
   window.addEventListener('pageshow',schedule);
   if(viewport)viewport.addEventListener('resize',schedule);
   publish();
+})();
+</script>
+<script>
+/* ===== 浮层状态同步给原生（返回键用）——cwm 同款：推状态，不靠 evaluateJavascript 返回值 ===== */
+(function(){
+  var IDS=[['firstrun-overlay','open'],['settings-overlay','open'],['cover-viewer','show'],['chap-modal','show'],['dl-sheet','show'],['accent-picker-overlay','open'],['cfm-mask','show']];
+  var last=null;
+  function sync(){
+    var any=false;
+    for(var i=0;i<IDS.length;i++){
+      var el=document.getElementById(IDS[i][0]);
+      if(el&&el.classList.contains(IDS[i][1])){any=true;break;}
+    }
+    if(any===last)return;
+    last=any;
+    try{
+      if(window.CwmAndroid&&typeof window.CwmAndroid.setOverlayOpen==='function')window.CwmAndroid.setOverlayOpen(any);
+    }catch(e){}
+  }
+  window.cwmSyncOverlayFlag=sync;
+  if(typeof MutationObserver==='undefined')return;
+  var obs=new MutationObserver(sync);
+  function wire(){
+    for(var i=0;i<IDS.length;i++){
+      var el=document.getElementById(IDS[i][0]);
+      if(!el||el.dataset.ovObs==='1')continue;
+      el.dataset.ovObs='1';
+      obs.observe(el,{attributes:true,attributeFilter:['class','hidden']});
+    }
+    sync();
+  }
+  wire();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire,{once:true});
 })();
 </script>
 </body>
