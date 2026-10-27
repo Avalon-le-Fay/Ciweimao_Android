@@ -2460,7 +2460,7 @@ html[data-theme="dark"] .fr-card{background:color-mix(in srgb,var(--card) 97%,tr
     <div class="chapter-toolbar"><button type="button" class="chapter-select-all" id="chap-select-all">全选</button><span>选择分卷、章节组或单章</span></div>
     <div class="chapter-list" id="chap-list"><div class="empty">正在加载…</div></div>
     <div class="chapter-footer">
-      <div class="chapter-total"><span>应付 <strong id="chap-selected-cost">0 币</strong></span><span>需购 <strong id="chap-purchase-count">0 章</strong></span><span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span><em class="chapter-need-note" id="chap-afford">未购章节会跳过；没有添加购买功能</em><small>已选 <strong id="chap-selected-count">0</strong> 章</small></div>
+      <div class="chapter-total"><span>应付 <strong id="chap-selected-cost">0 币</strong></span><span>需购 <strong id="chap-purchase-count">0 章</strong></span><span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span><em class="chapter-need-note" id="chap-afford">未购章节会被跳过</em><small>已选 <strong id="chap-selected-count">0</strong> 章</small></div>
       <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="chap-modal-cancel">取消</button><button type="button" class="btn btn-primary btn-sm" id="chap-modal-ok" disabled>开始下载</button></div>
     </div>
   </section>
@@ -4741,20 +4741,41 @@ function renderChapterSelection(data){
     /* 「未购章节会跳过」是固定文案，已放在「需购 x 章」下方，不再按数量改写 */
   }
   function update(){
-    const checked=Array.prototype.slice.call(list.querySelectorAll('input[data-chapter-seq]:checked')); let amount=0;
-    checked.forEach(function(input){amount+=Number(input.closest('.chapter-row').dataset.price)||0;});
-    const purchase=checked.filter(function(input){return Number(input.closest('.chapter-row').dataset.price)>0;}).length;
-    summary.textContent='共 '+total+' 章 · 已购 '+owned+' · 免费 '+free+(unreviewed?' · 未审核 '+unreviewed:'')+' · 待购 '+(total-owned-free-unreviewed)+' · 已选 '+checked.length+' 章';
-    selectedCount.textContent=String(checked.length);
+    /* 单次遍历统计：以前每个组/分卷都重新 querySelectorAll 扫全表，324 章时是 O(N²)。 */
+    const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-chapter-seq]'));
+    let amount=0, purchase=0, checkedCount=0;
+    const gStat=Object.create(null), dStat=Object.create(null);
+    for(let i=0;i<rows.length;i++){
+      const input=rows[i];
+      const row=input.closest('.chapter-row');
+      const price=row?(Number(row.dataset.price)||0):0;
+      const g=input.dataset.parent, d=input.dataset.division;
+      const gs=gStat[g]||(gStat[g]={n:0,on:0});
+      const ds=dStat[d]||(dStat[d]={n:0,on:0});
+      gs.n+=1; ds.n+=1;
+      if(input.checked){
+        gs.on+=1; ds.on+=1; checkedCount+=1; amount+=price;
+        if(price>0)purchase+=1;
+      }
+    }
+    summary.textContent='共 '+total+' 章 · 已购 '+owned+' · 免费 '+free+(unreviewed?' · 未审核 '+unreviewed:'')+' · 待购 '+(total-owned-free-unreviewed)+' · 已选 '+checkedCount+' 章';
+    selectedCount.textContent=String(checkedCount);
     purchaseCount.textContent=String(purchase)+' 章';
     selectedCost.textContent=chapMoney(amount)+' 币';
-    downloadButton.disabled=checked.length===0;
+    downloadButton.disabled=checkedCount===0;
     downloadButton.textContent='开始下载';
     renderAfford(amount,purchase);
-    list.querySelectorAll('input[data-group-check]').forEach(function(box){const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-parent="'+box.dataset.groupCheck+'"]'));box.checked=rows.length>0&&rows.every(function(row){return row.checked;});box.indeterminate=rows.some(function(row){return row.checked;})&&!box.checked;});
-    list.querySelectorAll('input[data-division-check]').forEach(function(box){const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-division="'+box.dataset.divisionCheck+'"]'));box.checked=rows.length>0&&rows.every(function(row){return row.checked;});box.indeterminate=rows.some(function(row){return row.checked;})&&!box.checked;});
-    const all=list.querySelectorAll('input[data-chapter-seq]');
-    $('#chap-select-all').textContent=all.length&&checked.length===all.length?'取消全选':'全选';
+    list.querySelectorAll('input[data-group-check]').forEach(function(box){
+      const st=gStat[box.dataset.groupCheck]||{n:0,on:0};
+      box.checked=st.n>0&&st.on===st.n;
+      box.indeterminate=st.on>0&&st.on<st.n;
+    });
+    list.querySelectorAll('input[data-division-check]').forEach(function(box){
+      const st=dStat[box.dataset.divisionCheck]||{n:0,on:0};
+      box.checked=st.n>0&&st.on===st.n;
+      box.indeterminate=st.on>0&&st.on<st.n;
+    });
+    $('#chap-select-all').textContent=rows.length&&checkedCount===rows.length?'取消全选':'全选';
     list.querySelectorAll('[data-group-total]').forEach(function(node){node.textContent=node.dataset.totalPrice==='0'?'免费':chapMoney(node.dataset.totalPrice)+'币';});
     list.querySelectorAll('[data-division-total]').forEach(function(node){node.textContent=node.dataset.totalPrice==='0'?'免费':chapMoney(node.dataset.totalPrice)+'币';});
   }
@@ -4780,7 +4801,7 @@ function renderChapterSelection(data){
       divisionChildren.appendChild(section); wireDisclosure(section,false);
       section.querySelector('input[data-group-check]').addEventListener('change',function(event){const checked=event.currentTarget.checked;list.querySelectorAll('input[data-parent="'+groupKey+'"]').forEach(function(input){input.checked=checked;});update();});
     });
-    list.appendChild(division); wireDisclosure(division,true);
+    list.appendChild(division); wireDisclosure(division,false);
     division.querySelector('input[data-division-check]').addEventListener('change',function(event){const checked=event.currentTarget.checked;list.querySelectorAll('input[data-division="'+divisionKey+'"]').forEach(function(input){input.checked=checked;});update();});
   });
   list.addEventListener('change',function(event){if(event.target.matches('input[data-chapter-seq]'))update();});
