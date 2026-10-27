@@ -489,6 +489,7 @@ input[type=text]:focus{border-color:var(--blue)}
 .info{flex:1;min-width:0}
 .info .name{font-size:var(--fs-name);font-weight:600;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .info .meta{font-size:var(--fs-cap);color:var(--text)}
+.info .meta.meta-stack{display:flex;flex-direction:column;gap:1px;line-height:1.4}
 .badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;margin-top:6px}
 .ic{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;display:inline-block;flex-shrink:0}
 .ic-tab{width:19px;height:19px;stroke-width:1.7;vertical-align:-4px;margin-right:3px}
@@ -1439,7 +1440,8 @@ html[data-theme="dark"] .local-book .card.card-press{box-shadow:0 1px 4px rgba(0
 /* ===== 悬浮底部导航栏 (App 风格) ===== */
 .tabs {
   position: fixed !important;
-  bottom: calc(24px + var(--safe-bottom)) !important;
+  --tabs-bottom: calc(24px + var(--safe-bottom));
+  bottom: var(--tabs-bottom) !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   width: calc(100% - 32px) !important;
@@ -1453,7 +1455,13 @@ html[data-theme="dark"] .local-book .card.card-press{box-shadow:0 1px 4px rgba(0
   margin-bottom: 0 !important;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2) !important;
   /* 给上下位置变动加上丝滑的过渡动画，匹配操作栏的弹出速度 */
-  transition: bottom 0.24s cubic-bezier(.22, 1, .36, 1) !important;
+  /* 收起/回位要同时过渡 transform + opacity + visibility，
+     只写 bottom 的话键盘弹出时是"瞬间消失"，没有滑动。 */
+  transition:
+    bottom var(--dur-2) var(--ease-out),
+    transform .225s cubic-bezier(0,0,.2,1),
+    opacity .225s cubic-bezier(0,0,.2,1),
+    visibility 0s linear 0s !important;
 }
 
 /* 当检测到操作栏弹出时，自动把底部的导航栏向上顶起 */
@@ -1607,12 +1615,12 @@ html[data-keyboard-open="true"] #dl-fab {
   visibility: hidden !important;
   pointer-events: none !important;
   transition:
-    transform .195s cubic-bezier(.4,0,.2,1),
-    opacity .195s cubic-bezier(.4,0,.2,1),
+    transform .195s cubic-bezier(.4,0,.6,1),
+    opacity .195s cubic-bezier(.4,0,.6,1),
     visibility 0s linear .195s !important;
 }
 html[data-keyboard-open="true"] #dn { transform: translateY(140%) scale(.72) !important; }
-html[data-keyboard-open="true"] .tabs { transform: translate(-50%, calc(100% + 24px + var(--safe-bottom))) !important; }
+html[data-keyboard-open="true"] .tabs { transform: translateX(-50%) translateY(calc(100% + var(--tabs-bottom))) !important; }
 html[data-keyboard-open="true"] #dl-fab { transform: translateX(140%) scale(.72) !important; }
 @media (prefers-reduced-motion:reduce){
   html[data-keyboard-open="true"] .tabs,
@@ -2902,7 +2910,7 @@ function renderLocal(animate){
     return '<div class="local-book" data-id="'+esc(id)+'">'
       +'<div class="card'+(animate?' stagger-item':'')+' '+(on?'sel':'')+'" style="'+(animate?'--i:'+i:'')+'">'
       +coverEl(b)+'<div class="info"><div class="name">'+esc(b.name)+'</div>'
-      +'<div class="meta">'+icon('user')+' '+esc(b.author)+' · ID '+esc(id)+' · 缓存 '+b.chapters_cached+' 章</div>'
+      +'<div class="meta meta-stack"><span>'+icon('user')+' '+esc(b.author)+'</span><span>ID: '+esc(id)+'</span><span>缓存: '+b.chapters_cached+' 章</span></div>'
       +'<span class="badge '+(b.unknown?'pending':'ready')+'">'+(b.unknown?'待同步书名':'已就绪')+'</span></div>'
       +'<div class="check '+(on?'on':'')+'">'+(on?icon('check'):'')+'</div></div>'
       +'<div class="local-progress-slot" data-progress-key="'+esc(key)+'">'+progHTML(progressCache[id])+'</div></div>';
@@ -2923,7 +2931,7 @@ function renderLib(list){
     '<div class="card stagger-item" style="--i:'+i+'" data-id="'+esc(b.id)+'">'
     + coverEl(b)
     + '<div class="info"><div class="name">'+esc(b.name)+'</div>'
-    +   '<div class="meta">'+icon('user')+' '+esc(b.author)+' · ID '+esc(b.id)+'</div></div>'
+    +   '<div class="meta meta-stack"><span>'+icon('user')+' '+esc(b.author)+'</span><span>ID: '+esc(b.id)+'</span></div></div>'
     + '<button class="btn btn-ghost btn-sm">填入</button>'
     + '</div>').join('');
 }
@@ -4578,7 +4586,7 @@ function renderShelf(kw){
       html+='<div class="card'+(index<SHELF_RENDER_BATCH?' stagger-item':'')+'" style="--i:'+index+'" data-id="'+esc(b.book_id)+'" data-name="'+esc(b.book_name)+'">'
         + coverEl({cover:b.cover})
         + '<div class="info"><div class="name">'+esc(b.book_name)+'</div>'
-        +   '<div class="meta">'+icon('user')+' '+esc(b.author_name)+' · ID '+esc(b.book_id)+' · '+esc(b.total_word_count||'')+'字</div></div>'
+        +   '<div class="meta meta-stack"><span>'+icon('user')+' '+esc(b.author_name)+'</span><span>ID: '+esc(b.book_id)+'</span><span>字数: '+esc(b.total_word_count||'')+'</span></div></div>'
         + '<div style="display:flex;flex-direction:column;gap:6px">'
         +   '<button class="btn btn-primary btn-sm act-dl">下载</button>'
         +   '<button class="btn btn-ghost btn-sm act-dl-sel">指定章节</button>'
