@@ -31,7 +31,7 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: 检查 web/index.html 没有样式泄漏
+      - name: Check web/index.html for style leaks
         run: |
           python3 - <<'PY'
           import re, sys
