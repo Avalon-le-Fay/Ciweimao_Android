@@ -27,11 +27,10 @@ class CiweimaoClient(
         parameters["account"] = account
         parameters.putAll(data)
         if (config.isLatest && path.trimStart('/') == "reader/get_my_info") {
+            // 服务端不校验 reader_id：空值/乱填都会返回 token 所属账号的真实资料。
+            // 留空时不携带，checkLogin() 会从 reader_info 取回真值再由 activate 落库。
             val readerId = config.readerId.trim()
-            require(readerId.isNotEmpty()) {
-                "2.9.366 的 get_my_info 需要 reader_id"
-            }
-            parameters["reader_id"] = readerId
+            if (readerId.isNotEmpty()) parameters["reader_id"] = readerId
         }
         return DownloadRequestVerification.request(account, config, path, parameters) { proofFields ->
             transport.request(

@@ -170,8 +170,11 @@ class CacheRepository(private val paths: RuntimePaths) {
             file.isFile && file.extension.lowercase() in setOf("txt", "epub") &&
                 !FileTools.isSymbolicLink(file)
         }
-        ?.sortedBy { it.name }
-        ?.map { OutputSummary(it.name, it.length(), it.extension.lowercase()) }
+        // 最新生成的文件排前面：导出列表是下载历史，用户找的是刚写完的那本。
+        ?.sortedWith(compareByDescending<File> { it.lastModified() }.thenBy { it.name })
+        ?.map { file ->
+            OutputSummary(file.name, file.length(), file.extension.lowercase(), file.lastModified())
+        }
         .orEmpty()
 
     private data class DeleteStats(

@@ -111,7 +111,8 @@ object EmbeddedServer {
             reportStage("初始化受限 Root 网关")
             RootImportGateway.initialize(context)
             reportStage("加载并构造 NativeHttpServer")
-            val created = NativeHttpServer(context, PORT, nativeToken, ::reportStage)
+            val host = if (AppSettings.lanAccess(context)) "0.0.0.0" else "127.0.0.1"
+            val created = NativeHttpServer(context, PORT, host, nativeToken, ::reportStage)
             candidate = created
             reportStage("绑定 0.0.0.0:$PORT")
             created.start(fi.iki.elonen.NanoHTTPD.SOCKET_READ_TIMEOUT, false)

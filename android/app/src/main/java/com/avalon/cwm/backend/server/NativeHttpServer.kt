@@ -8,9 +8,10 @@ import org.json.JSONException
 class NativeHttpServer(
     context: Context,
     port: Int,
+    host: String = "0.0.0.0",
     private val nativeToken: String,
     private val reportStartupStage: (String) -> Unit = {},
-) : NanoHTTPD("0.0.0.0", port) {
+) : NanoHTTPD(host, port) {
     private val appContext = initialize("获取 Application Context") { context.applicationContext }
     private val runtime = initialize("构造后端运行时") { BackendRuntime(appContext, reportStartupStage) }
     private val sessions = initialize("初始化访问会话") { AccessSessions(appContext) }

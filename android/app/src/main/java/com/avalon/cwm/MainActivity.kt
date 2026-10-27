@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         val url: String? = null,
         val filename: String? = null,
         val mimeType: String? = null,
+        val coverBaseName: String? = null,
     )
 
     private lateinit var safDownloadController: SafDownloadController
@@ -80,6 +81,10 @@ class MainActivity : AppCompatActivity() {
 
     @Volatile
     private var trustedBridgePage = false
+
+    /** 网页侧是否有浮层打开；返回键只看这个，不依赖 evaluateJavascript 的返回值。 */
+    @Volatile
+    private var webOverlayOpen = false
 
     private var storageDialogShown = false
 
@@ -496,6 +501,79 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun isAvailable(): Boolean = true
 
+        @Suppress("DEPRECATION")
+        @JavascriptInterface
+        fun getAppInfo(): String {
+            val info = packageManager.getPackageInfo(packageName, 0)
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode.toInt()
+            } else {
+                info.versionCode
+            }
+            return JSONObject()
+                .put("versionName", info.versionName ?: "")
+                .put("versionCode", code)
+                .toString()
+        }
+
+        /** 用系统浏览器打开 https 链接（下载 APK 用；WebView 自己不处理下载）。 */
+        @JavascriptInterface
+        fun openExternal(url: String) {
+            if (destroyed || !trustedBridgePage) return
+            val target = url.trim()
+            if (!target.startsWith("https://")) return
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(this@MainActivity, "没有可打开该链接的应用", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        /** 需要在服务启动前生效的设置，供网页读取当前值。 */
+        @JavascriptInterface
+        fun getSettings(): String = JSONObject()
+            .put("lanAccess", AppSettings.lanAccess(this@MainActivity))
+            .toString()
+
+        /** 局域网访问开关：写盘，下次启动服务时生效。 */
+        @JavascriptInterface
+        fun setLanAccess(enabled: Boolean) {
+            if (destroyed) return
+            AppSettings.setLanAccess(this@MainActivity, enabled)
+        }
+
+        /** 网页浮层开关时同步过来，供返回键判断。 */
+        @JavascriptInterface
+        fun setOverlayOpen(open: Boolean) {
+            if (destroyed || !trustedBridgePage) return
+            webOverlayOpen = open
+        }
+
+        /** 保存封面到「导出文件」用的 SAF 目录；没选过目录会先弹系统选择器。 */
+        @JavascriptInterface
+        fun saveCoverImage(url: String, baseName: String) {
+            runOnUiThread {
+                if (destroyed || !isTrustedLocalPage()) {
+                    sendNativeDownloadEvent(
+                        JSONObject().put("type", "error").put("batch", false)
+                            .put("error", "封面下载只能从本应用本地页面发起"),
+                    )
+                    return@runOnUiThread
+                }
+                if (url.isBlank() || !isTrustedLocalUrl(url)) {
+                    sendNativeDownloadEvent(
+                        JSONObject().put("type", "error").put("batch", false).put("error", "封面地址无效"),
+                    )
+                    return@runOnUiThread
+                }
+                requestNativeDownload(
+                    PendingNativeDownload(url = url, coverBaseName = coverBaseName(baseName)),
+                )
+            }
+        }
+
         @JavascriptInterface
         fun getNativeDownloadDirectory(): String {
             if (destroyed || !trustedBridgePage) return ""
@@ -606,6 +684,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 封面基础名：去掉非法字符、压空白、限长；扩展名由 ImageSniffer 按文件头决定。 */
+    private fun coverBaseName(baseName: String): String =
+        baseName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .replace(Regex("\\s+"), " ").trim().take(60).ifBlank { "封面" }
+
     private fun requestNativeDownload(request: PendingNativeDownload) {
         if (pendingNativeDownload != null) {
             sendNativeDownloadEvent(
@@ -626,6 +709,9 @@ class MainActivity : AppCompatActivity() {
         when {
             request.namesJson != null && request.optionsJson != null -> {
                 safDownloadController.downloadOutputs(treeUri, request.namesJson, request.optionsJson)
+            }
+            request.url != null && request.coverBaseName != null -> {
+                safDownloadController.downloadCover(treeUri, request.url, request.coverBaseName)
             }
             request.url != null && request.filename != null -> {
                 safDownloadController.downloadDirect(
@@ -744,6 +830,16 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
                 if (trustedBridgePage) {
+                    // 网页报过「有浮层」就直接让它关，不依赖 evaluateJavascript 的返回值
+                    // （实测返回值经常拿不到 "true"，导致返回键永远弹退出框）。
+                    if (webOverlayOpen) {
+                        webOverlayOpen = false
+                        webView.evaluateJavascript(
+                            "window.cwmDismissTopOverlay && window.cwmDismissTopOverlay();",
+                            null,
+                        )
+                        return
+                    }
                     webView.evaluateJavascript(
                         "Boolean(window.cwmDismissTopOverlay && window.cwmDismissTopOverlay())",
                     ) { handled ->

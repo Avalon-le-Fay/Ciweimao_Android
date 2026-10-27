@@ -11,63 +11,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/**
- * The chapter number printed in a chapter title.
- *
- * Titles arrive in two shapes: "138.所谓的半身" and "第一百三十八章:...".
- * This is the number the reader actually sees and picks in the picker, so it
- * is the only one that can match the finished file's name.
- */
-internal fun titleChapterNumber(title: String): Int? {
-    val text = title.trim()
-    if (text.isEmpty()) return null
-    Regex("^(\\d{1,5})\\s*[.、,，:：]").find(text)?.let { match ->
-        return match.groupValues[1].toIntOrNull()
-    }
-    val chinese = Regex("^第([零一二三四五六七八九十百千两0-9]{1,12})[章节回]").find(text)
-        ?: return null
-    val raw = chinese.groupValues[1]
-    raw.toIntOrNull()?.let { return it }
-    return chineseNumber(raw)
-}
-
-/** 一百三十八 -> 138. Returns null when the text is not a plain number. */
-internal fun chineseNumber(raw: String): Int? {
-    val digits = mapOf(
-        '零' to 0, '一' to 1, '二' to 2, '两' to 2, '三' to 3, '四' to 4,
-        '五' to 5, '六' to 6, '七' to 7, '八' to 8, '九' to 9,
-    )
-    var total = 0
-    var pending = 0
-    for (ch in raw) {
-        when {
-            digits.containsKey(ch) -> pending = digits.getValue(ch)
-            ch == '十' -> { total += (if (pending == 0) 1 else pending) * 10; pending = 0 }
-            ch == '百' -> { total += (if (pending == 0) 1 else pending) * 100; pending = 0 }
-            ch == '千' -> { total += (if (pending == 0) 1 else pending) * 1000; pending = 0 }
-            else -> return null
-        }
-    }
-    return total + pending
-}
-
-/**
- * "138-152" for the selected chapters, or null when nothing is selected.
- *
- * Prefers the printed title numbers; falls back to the positional index only
- * when every selected title is unnumbered, so a mixed list can never yield a
- * meaningless range.
- */
-internal fun excerptSpan(selected: List<OrderedOnlineChapter>): String? {
-    if (selected.isEmpty()) return null
-    val titled = selected.map { titleChapterNumber(it.fallbackTitle) }
-    val numbers = if (titled.all { it != null }) titled.filterNotNull()
-        else selected.map { it.sequence }
-    val first = numbers.minOrNull() ?: return null
-    val last = numbers.maxOrNull() ?: first
-    return if (first == last) "$first" else "$first-$last"
-}
-
 class OnlineBookDownloader(
     private val paths: RuntimePaths,
     private val accounts: OnlineAccountRepository,
@@ -243,7 +186,15 @@ class OnlineBookDownloader(
                 )
             }
         }
-        return output.filter { it.chapterId.isNotEmpty() }
+        val ordered = output.filter { it.chapterId.isNotEmpty() }
+        // 未审核占位章没有标题编号：先按整本目录推断编号，让文件名、记录和成品里的小节
+        // 都用同一个“读者认得的”章号（165），而不是会漂移的 TOC 序号（168）。
+        val numbers = chapterDisplayNumbers(ordered)
+        return ordered.mapIndexed { index, chapter ->
+            val number = numbers[index]
+            if (number == null || number == chapter.displayNumber) chapter
+            else chapter.copy(displayNumber = number)
+        }
     }
 
     private fun selectChapters(
@@ -307,7 +258,7 @@ class OnlineBookDownloader(
             "ok" -> "下载: $label"
             "skip" -> "已有缓存，跳过: $label"
             "locked" -> "未购买，跳过: $label"
-            "pending" -> "第${result.chapter.sequence}章 该章节审核未通过"
+            "pending" -> "第${chapterDisplayNumber(result.chapter)}章 该章节审核未通过"
             else -> "失败: $label"
         }
     }
@@ -348,7 +299,30 @@ class OnlineBookDownloader(
                         "locked" -> locked += 1
                         "pending" -> {
                             pending += 1
-                            pendingChapters += PendingChapter(orderedChapter.sequence, orderedChapter.fallbackTitle)
+                            pendingChapters += PendingChapter(
+                                chapterDisplayNumber(orderedChapter),
+                                orderedChapter.fallbackTitle,
+                            )
+                            // 未审核章不再静默跳过：txt / epub 里保留一个小节，
+                            // 有正文的章会走下面的正常分支。
+                            val heading = pendingChapterHeading(orderedChapter)
+                            val notice = pendingChapterNotice()
+                            if (currentDivisionName != orderedChapter.divisionName) {
+                                currentDivision = com.avalon.cwm.backend.core.Division(
+                                    id = divisions.size.toLong() + 1,
+                                    title = orderedChapter.divisionName,
+                                )
+                                divisions += requireNotNull(currentDivision)
+                                currentDivisionName = orderedChapter.divisionName
+                            }
+                            writer.append(heading).append('\n').append(notice).append("\n\n")
+                            currentDivision?.chapters?.add(
+                                com.avalon.cwm.backend.core.Chapter(
+                                    id = orderedChapter.chapterId.toLongOrNull() ?: 0L,
+                                    title = heading,
+                                    content = notice,
+                                ),
+                            )
                         }
                         else -> failed += 1
                     }
