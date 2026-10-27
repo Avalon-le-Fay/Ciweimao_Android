@@ -15,6 +15,11 @@ data class OrderedOnlineChapter(
     val access: ChapterAccess,
     val unitHlb: BigDecimal? = null,
     val pending: Boolean = false,
+    /**
+     * 展示用章号：标题里的编号；未审核占位章按相邻编号推断（chapterDisplayNumbers）。
+     * TOC 序号（sequence）会因前置章 / 跳号 / 占位章整体偏移，展示一律用它。
+     */
+    val displayNumber: Int? = null,
 )
 
 data class ChapterFetchResult(
