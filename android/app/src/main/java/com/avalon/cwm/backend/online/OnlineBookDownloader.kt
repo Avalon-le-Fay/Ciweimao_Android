@@ -291,7 +291,28 @@ class OnlineBookDownloader(
         var currentDivision: com.avalon.cwm.backend.core.Division? = null
         var currentDivisionName: String? = null
 
+        fun ensureDivision(divisionName: String) {
+            val normalized = divisionName.trim()
+            if (currentDivisionName == normalized) return
+            val division = com.avalon.cwm.backend.core.Division(
+                id = divisions.size.toLong() + 1,
+                title = normalized,
+            )
+            divisions += division
+            currentDivision = division
+            currentDivisionName = normalized
+        }
+
         completeText.bufferedWriter(Charsets.UTF_8).use { writer ->
+            // 卷名只在“真正写出本章”时落一行，避免某卷开头几章都未购买 /
+            // 未审核时留下一段只有卷名、没有正文的空壳。
+            var lastVolumeHeading: String? = null
+            fun writeVolumeHeading(divisionName: String) {
+                val heading = divisionName.trim()
+                if (heading.isEmpty() || heading == lastVolumeHeading) return
+                lastVolumeHeading = heading
+                writer.append(heading).append("\n\n")
+            }
             ordered.forEach { orderedChapter ->
                 val loaded = loadChapter(orderedChapter, fetched, cacheDirectory)
                 if (loaded == null) {
@@ -307,14 +328,8 @@ class OnlineBookDownloader(
                             // 有正文的章会走下面的正常分支。
                             val heading = pendingChapterHeading(orderedChapter)
                             val notice = pendingChapterNotice()
-                            if (currentDivisionName != orderedChapter.divisionName) {
-                                currentDivision = com.avalon.cwm.backend.core.Division(
-                                    id = divisions.size.toLong() + 1,
-                                    title = orderedChapter.divisionName,
-                                )
-                                divisions += requireNotNull(currentDivision)
-                                currentDivisionName = orderedChapter.divisionName
-                            }
+                            ensureDivision(orderedChapter.divisionName)
+                            writeVolumeHeading(orderedChapter.divisionName)
                             writer.append(heading).append('\n').append(notice).append("\n\n")
                             currentDivision?.chapters?.add(
                                 com.avalon.cwm.backend.core.Chapter(
@@ -330,14 +345,8 @@ class OnlineBookDownloader(
                 }
 
                 val (title, content) = loaded
-                if (currentDivisionName != orderedChapter.divisionName) {
-                    currentDivision = com.avalon.cwm.backend.core.Division(
-                        id = divisions.size.toLong() + 1,
-                        title = orderedChapter.divisionName,
-                    )
-                    divisions += requireNotNull(currentDivision)
-                    currentDivisionName = orderedChapter.divisionName
-                }
+                ensureDivision(orderedChapter.divisionName)
+                writeVolumeHeading(orderedChapter.divisionName)
                 writer.append(title).append('\n').append(content).append("\n\n")
                 val safeTitle = FileTools.sanitizeName(title)
                     .ifBlank { orderedChapter.chapterId }

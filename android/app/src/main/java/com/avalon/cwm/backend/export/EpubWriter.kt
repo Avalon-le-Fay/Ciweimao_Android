@@ -1,6 +1,7 @@
 package com.avalon.cwm.backend.export
 
 import com.avalon.cwm.backend.core.Book
+import com.avalon.cwm.backend.core.Chapter
 import com.avalon.cwm.backend.core.FileTools
 import com.avalon.cwm.backend.net.WebContentClient
 import org.json.JSONObject
@@ -27,6 +28,13 @@ class EpubWriter(
         val bytes: ByteArray,
     )
 
+    /** 一个分卷在 EPUB 里的独立标题页（目录里可点，正文里分页）。 */
+    private data class VolumeAsset(
+        val id: String,
+        val href: String,
+        val title: String,
+    )
+
     private data class ChapterAsset(
         val id: String,
         val href: String,
@@ -35,17 +43,30 @@ class EpubWriter(
         val body: String,
     )
 
+    /** 按目录顺序切出的连续段：一卷（或没有卷名的一组章节）。 */
+    private data class Section(
+        val volume: VolumeAsset?,
+        val chapters: List<ChapterAsset>,
+    )
+
+    private data class DivisionContent(
+        val title: String,
+        val chapters: List<Chapter>,
+    )
+
     fun write(book: Book, destination: File, imageCache: File? = null): Result {
         destination.parentFile?.let(FileTools::ensureDirectory)
         imageCache?.let(FileTools::ensureDirectory)
 
-        val chapterSources = book.divisions.flatMap { division ->
-            division.chapters.map { chapter -> Triple(division.title, chapter.title, chapter.content) }
+        val divisions = book.divisions.mapNotNull { division ->
+            if (division.chapters.isEmpty()) return@mapNotNull null
+            DivisionContent(division.title.trim(), division.chapters)
         }
-        require(chapterSources.isNotEmpty()) { "没有可写入 EPUB 的章节" }
+        require(divisions.isNotEmpty()) { "没有可写入 EPUB 的章节" }
 
+        val chapterSources = divisions.flatMap { it.chapters }
         val imageUrls = linkedSetOf<String>()
-        chapterSources.forEach { (_, _, content) -> imageUrls += extractImageUrls(content) }
+        chapterSources.forEach { chapter -> imageUrls += extractImageUrls(chapter.content) }
         val imagesByUrl = linkedMapOf<String, ImageAsset>()
         imageUrls.forEach { url ->
             val bytes = try {
@@ -72,15 +93,33 @@ class EpubWriter(
             }
         }
 
-        val chapters = chapterSources.mapIndexed { index, (division, title, content) ->
-            ChapterAsset(
-                id = "chapter_${index + 1}",
-                href = "chapters/chapter_${index + 1}.xhtml",
-                title = title,
-                divisionTitle = division,
-                body = chapterBody(title, content, imagesByUrl),
-            )
+        var chapterIndex = 0
+        var volumeIndex = 0
+        val sections = divisions.map { division ->
+            // 没有卷名的书不要生成空标题页，也不要在目录里套一层空节点。
+            val volume = if (division.title.isEmpty()) {
+                null
+            } else {
+                volumeIndex += 1
+                VolumeAsset(
+                    id = "volume_$volumeIndex",
+                    href = "chapters/volume_$volumeIndex.xhtml",
+                    title = division.title,
+                )
+            }
+            val chapters = division.chapters.map { chapter ->
+                chapterIndex += 1
+                ChapterAsset(
+                    id = "chapter_$chapterIndex",
+                    href = "chapters/chapter_$chapterIndex.xhtml",
+                    title = chapter.title,
+                    divisionTitle = division.title,
+                    body = chapterBody(chapter.title, chapter.content, imagesByUrl),
+                )
+            }
+            Section(volume, chapters)
         }
+        val chapters = sections.flatMap { it.chapters }
 
         val identifier = "ciweimao_${book.id}_${UUID.randomUUID()}"
         val temporary = File(destination.parentFile, ".${destination.name}.${System.nanoTime()}.tmp")
@@ -97,12 +136,17 @@ class EpubWriter(
                 imagesByUrl.values.forEach { image ->
                     putBytes(zip, "OEBPS/${image.href}", image.bytes)
                 }
-                chapters.forEach { chapter ->
-                    putText(zip, "OEBPS/${chapter.href}", chapterXhtml(chapter))
+                sections.forEach { section ->
+                    section.volume?.let { volume ->
+                        putText(zip, "OEBPS/${volume.href}", volumeXhtml(volume))
+                    }
+                    section.chapters.forEach { chapter ->
+                        putText(zip, "OEBPS/${chapter.href}", chapterXhtml(chapter))
+                    }
                 }
-                putText(zip, "OEBPS/nav.xhtml", navigationXhtml(book, chapters))
-                putText(zip, "OEBPS/toc.ncx", ncx(book, identifier, chapters))
-                putText(zip, "OEBPS/content.opf", packageDocument(book, identifier, chapters, imagesByUrl.values))
+                putText(zip, "OEBPS/nav.xhtml", navigationXhtml(book, sections))
+                putText(zip, "OEBPS/toc.ncx", ncx(book, identifier, sections))
+                putText(zip, "OEBPS/content.opf", packageDocument(book, identifier, sections, imagesByUrl.values))
             }
             if (destination.exists()) check(destination.delete()) { "无法替换旧 EPUB" }
             check(temporary.renameTo(destination)) { "无法保存 EPUB" }
@@ -210,12 +254,12 @@ class EpubWriter(
                 when {
                     escaped -> escaped = false
                     character == 92.toChar() -> escaped = true
-                    character == '"' -> inString = false
+                    character == '\"' -> inString = false
                 }
                 continue
             }
             when (character) {
-                '"' -> inString = true
+                '\"' -> inString = true
                 '{' -> depth += 1
                 '}' -> {
                     depth -= 1
@@ -237,17 +281,39 @@ class EpubWriter(
         </html>
     """.trimIndent()
 
-    private fun navigationXhtml(book: Book, chapters: List<ChapterAsset>): String {
-        val grouped = chapters.groupBy { it.divisionTitle }
+    private fun volumeXhtml(volume: VolumeAsset): String = xmlHeader() + """
+        <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-CN" lang="zh-CN">
+          <head>
+            <title>${escape(volume.title)}</title>
+            <link rel="stylesheet" type="text/css" href="../styles/book.css"/>
+          </head>
+          <body>
+            <section class="volume-title">
+              <h1>${escape(volume.title)}</h1>
+            </section>
+          </body>
+        </html>
+    """.trimIndent()
+
+    private fun navigationXhtml(book: Book, sections: List<Section>): String {
         val list = buildString {
             append("<ol>")
-            grouped.forEach { (division, items) ->
-                append("<li><span>").append(escape(division)).append("</span><ol>")
-                items.forEach { chapter ->
-                    append("<li><a href=\"").append(chapter.href).append("\">")
-                        .append(escape(chapter.title)).append("</a></li>")
+            sections.forEach { section ->
+                val volume = section.volume
+                if (volume != null) {
+                    append("<li><a href=\"").append(volume.href).append("\">")
+                        .append(escape(volume.title)).append("</a><ol>")
+                    section.chapters.forEach { chapter ->
+                        append("<li><a href=\"").append(chapter.href).append("\">")
+                            .append(escape(chapter.title)).append("</a></li>")
+                    }
+                    append("</ol></li>")
+                } else {
+                    section.chapters.forEach { chapter ->
+                        append("<li><a href=\"").append(chapter.href).append("\">")
+                            .append(escape(chapter.title)).append("</a></li>")
+                    }
                 }
-                append("</ol></li>")
             }
             append("</ol>")
         }
@@ -259,15 +325,35 @@ class EpubWriter(
         """.trimIndent()
     }
 
-    private fun ncx(book: Book, identifier: String, chapters: List<ChapterAsset>): String {
-        val points = chapters.mapIndexed { index, chapter ->
-            """
-            <navPoint id="navPoint-${index + 1}" playOrder="${index + 1}">
-              <navLabel><text>${escape(chapter.title)}</text></navLabel>
-              <content src="${chapter.href}"/>
-            </navPoint>
-            """.trimIndent()
-        }.joinToString("\n")
+    private fun ncx(book: Book, identifier: String, sections: List<Section>): String {
+        var playOrder = 0
+        val points = buildString {
+            sections.forEach { section ->
+                val volume = section.volume
+                if (volume != null) {
+                    playOrder += 1
+                    append("<navPoint id=\"navPoint-$playOrder\" playOrder=\"$playOrder\">")
+                        .append("<navLabel><text>").append(escape(volume.title)).append("</text></navLabel>")
+                        .append("<content src=\"").append(volume.href).append("\"/>")
+                    section.chapters.forEach { chapter ->
+                        playOrder += 1
+                        append("<navPoint id=\"navPoint-$playOrder\" playOrder=\"$playOrder\">")
+                            .append("<navLabel><text>").append(escape(chapter.title)).append("</text></navLabel>")
+                            .append("<content src=\"").append(chapter.href).append("\"/>")
+                            .append("</navPoint>")
+                    }
+                    append("</navPoint>")
+                } else {
+                    section.chapters.forEach { chapter ->
+                        playOrder += 1
+                        append("<navPoint id=\"navPoint-$playOrder\" playOrder=\"$playOrder\">")
+                            .append("<navLabel><text>").append(escape(chapter.title)).append("</text></navLabel>")
+                            .append("<content src=\"").append(chapter.href).append("\"/>")
+                            .append("</navPoint>")
+                    }
+                }
+            }
+        }
         return xmlHeader() + """
             <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
               <head><meta name="dtb:uid" content="${escape(identifier)}"/></head>
@@ -280,7 +366,7 @@ class EpubWriter(
     private fun packageDocument(
         book: Book,
         identifier: String,
-        chapters: List<ChapterAsset>,
+        sections: List<Section>,
         images: Collection<ImageAsset>,
     ): String {
         val coverType = book.cover.takeIf { it.isNotEmpty() }
@@ -297,12 +383,23 @@ class EpubWriter(
                 append("<item id=\"").append(image.id).append("\" href=\"")
                     .append(image.href).append("\" media-type=\"").append(image.mime).append("\"/>")
             }
-            chapters.forEach { chapter ->
-                append("<item id=\"").append(chapter.id).append("\" href=\"")
-                    .append(chapter.href).append("\" media-type=\"application/xhtml+xml\"/>")
+            sections.mapNotNull { it.volume }.forEach { volume ->
+                append("<item id=\"").append(volume.id).append("\" href=\"")
+                    .append(volume.href).append("\" media-type=\"application/xhtml+xml\"/>")
+            }
+            sections.forEach { section ->
+                section.chapters.forEach { chapter ->
+                    append("<item id=\"").append(chapter.id).append("\" href=\"")
+                        .append(chapter.href).append("\" media-type=\"application/xhtml+xml\"/>")
+                }
             }
         }
-        val spine = chapters.joinToString("") { "<itemref idref=\"${it.id}\"/>" }
+        val spine = buildString {
+            sections.forEach { section ->
+                section.volume?.let { append("<itemref idref=\"").append(it.id).append("\"/>") }
+                section.chapters.forEach { append("<itemref idref=\"").append(it.id).append("\"/>") }
+            }
+        }
         return xmlHeader() + """
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="zh-CN">
               <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -330,6 +427,8 @@ class EpubWriter(
         h1 { font-size: 1.45em; margin: 0 0 1.4em; }
         p { margin: 0.6em 0; text-indent: 2em; }
         img { display: block; max-width: 100%; height: auto; margin: 1em auto; }
+        .volume-title { break-before: page; page-break-before: always; text-align: center; margin: 30% 8% 0; }
+        .volume-title h1 { font-size: 1.9em; line-height: 1.45; margin: 0; }
     """.trimIndent()
 
     private fun putStored(zip: ZipOutputStream, name: String, bytes: ByteArray) {
