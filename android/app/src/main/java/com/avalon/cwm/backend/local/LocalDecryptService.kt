@@ -6,6 +6,7 @@ import com.avalon.cwm.backend.core.Chapter
 import com.avalon.cwm.backend.core.CiweimaoCrypto
 import com.avalon.cwm.backend.core.Division
 import com.avalon.cwm.backend.core.FileTools
+import com.avalon.cwm.backend.core.formatBodyParagraphs
 import com.avalon.cwm.backend.core.RuntimePaths
 import com.avalon.cwm.backend.export.EpubWriter
 import com.avalon.cwm.backend.net.WebContentClient
@@ -184,6 +185,8 @@ class LocalDecryptService(
                     }
                     if (chapter.content.isEmpty()) return@chapterLoop
 
+                    // 成品排版：段首两个全角空格，段间空一行；缓存里仍是原始正文。
+                    chapter.content = formatBodyParagraphs(chapter.content)
                     completeBook.append(chapter.title).append('\n')
                         .append(chapter.content).append("\n\n")
                     val safeTitle = FileTools.sanitizeName(chapter.title).ifBlank { chapterId }

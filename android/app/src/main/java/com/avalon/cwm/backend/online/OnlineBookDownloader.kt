@@ -3,6 +3,7 @@ package com.avalon.cwm.backend.online
 import com.avalon.cwm.backend.core.Book
 import com.avalon.cwm.backend.core.ChapterAccess
 import com.avalon.cwm.backend.core.FileTools
+import com.avalon.cwm.backend.core.formatBodyParagraphs
 import com.avalon.cwm.backend.core.JsonFiles
 import com.avalon.cwm.backend.core.RuntimePaths
 import com.avalon.cwm.backend.export.EpubWriter
@@ -327,7 +328,7 @@ class OnlineBookDownloader(
                             // 未审核章不再静默跳过：txt / epub 里保留一个小节，
                             // 有正文的章会走下面的正常分支。
                             val heading = pendingChapterHeading(orderedChapter)
-                            val notice = pendingChapterNotice()
+                            val notice = formatBodyParagraphs(pendingChapterNotice())
                             ensureDivision(orderedChapter.divisionName)
                             writeVolumeHeading(orderedChapter.divisionName)
                             writer.append(heading).append('\n').append(notice).append("\n\n")
@@ -345,17 +346,19 @@ class OnlineBookDownloader(
                 }
 
                 val (title, content) = loaded
+                // 成品排版：段首两个全角空格，段间空一行；缓存里仍是原始正文。
+                val formatted = formatBodyParagraphs(content)
                 ensureDivision(orderedChapter.divisionName)
                 writeVolumeHeading(orderedChapter.divisionName)
-                writer.append(title).append('\n').append(content).append("\n\n")
+                writer.append(title).append('\n').append(formatted).append("\n\n")
                 val safeTitle = FileTools.sanitizeName(title)
                     .ifBlank { orderedChapter.chapterId }
-                File(chapterOutput, "$safeTitle.txt").writeText(content, Charsets.UTF_8)
+                File(chapterOutput, "$safeTitle.txt").writeText(formatted, Charsets.UTF_8)
                 currentDivision?.chapters?.add(
                     com.avalon.cwm.backend.core.Chapter(
                         id = orderedChapter.chapterId.toLongOrNull() ?: 0L,
                         title = title,
-                        content = content,
+                        content = formatted,
                     ),
                 )
                 got += 1
