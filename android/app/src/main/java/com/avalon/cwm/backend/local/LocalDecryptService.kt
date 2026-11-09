@@ -187,7 +187,7 @@ class LocalDecryptService(
 
                     // 成品排版：段首两个全角空格，段间空一行；缓存里仍是原始正文。
                     chapter.content = formatBodyParagraphs(chapter.content)
-                    completeBook.append(chapter.title).append('\n')
+                    completeBook.append(chapter.title).append("\n\n")
                         .append(chapter.content).append("\n\n")
                     val safeTitle = FileTools.sanitizeName(chapter.title).ifBlank { chapterId }
                     File(chapterOutput, "$safeTitle.txt").writeText(chapter.content, Charsets.UTF_8)

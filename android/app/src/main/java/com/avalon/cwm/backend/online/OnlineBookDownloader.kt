@@ -331,7 +331,7 @@ class OnlineBookDownloader(
                             val notice = formatBodyParagraphs(pendingChapterNotice())
                             ensureDivision(orderedChapter.divisionName)
                             writeVolumeHeading(orderedChapter.divisionName)
-                            writer.append(heading).append('\n').append(notice).append("\n\n")
+                            writer.append(heading).append("\n\n").append(notice).append("\n\n")
                             currentDivision?.chapters?.add(
                                 com.avalon.cwm.backend.core.Chapter(
                                     id = orderedChapter.chapterId.toLongOrNull() ?: 0L,
@@ -350,7 +350,7 @@ class OnlineBookDownloader(
                 val formatted = formatBodyParagraphs(content)
                 ensureDivision(orderedChapter.divisionName)
                 writeVolumeHeading(orderedChapter.divisionName)
-                writer.append(title).append('\n').append(formatted).append("\n\n")
+                writer.append(title).append("\n\n").append(formatted).append("\n\n")
                 val safeTitle = FileTools.sanitizeName(title)
                     .ifBlank { orderedChapter.chapterId }
                 File(chapterOutput, "$safeTitle.txt").writeText(formatted, Charsets.UTF_8)
