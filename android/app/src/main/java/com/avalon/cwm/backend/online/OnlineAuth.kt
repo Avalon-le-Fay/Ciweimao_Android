@@ -1,7 +1,6 @@
 package com.avalon.cwm.backend.online
 
 import org.json.JSONObject
-import java.security.SecureRandom
 import java.util.UUID
 
 /** Authentication flows shared by the legacy and exact 2.9.365 protocols. */
@@ -15,9 +14,6 @@ object CiweimaoAuth {
     ) {
         override fun toString(): String = "PhoneCodeSession(<redacted>)"
     }
-
-    private const val LOWER_HEX = "0123456789abcdef"
-    private val verificationRandom = SecureRandom()
 
     internal fun normalizeLatestPhoneNumber(value: String): String {
         val compact = value.trim().replace(Regex("""\s+"""), "")
@@ -35,17 +31,6 @@ object CiweimaoAuth {
             else -> throw IllegalArgumentException("请选择国家/地区并输入本地手机号")
         }
         return "1-$national"
-    }
-
-    internal fun generateVerificationHash(): String {
-        val bytes = ByteArray(16)
-        verificationRandom.nextBytes(bytes)
-        return buildString(32) {
-            bytes.forEach { byte ->
-                val value = byte.toInt() and 0xff
-                append(LOWER_HEX[value ushr 4]).append(LOWER_HEX[value and 0x0f])
-            }
-        }
     }
 
     fun guest(
@@ -196,18 +181,6 @@ object CiweimaoAuth {
         val identity = guest(config.copy(retries = 1), uuid)
         return PhoneCodeSession(phoneNumber, identity.getString("account"),
             identity.getString("login_token"), uuid, 0L)
-    }
-
-    internal fun beginPhoneCodeLogin(
-        loginName: String,
-        config: CiweimaoClientConfig,
-        existingSession: PhoneCodeSession? = null,
-        nowMillis: Long = System.currentTimeMillis(),
-    ): PhoneCodeSession {
-        val session = existingSession ?: preparePhoneCodeLogin(loginName, config)
-        require(session.phoneNumber == normalizeLatestPhoneNumber(loginName)) { "短信会话与手机号不匹配" }
-        sendPhoneCode(session, config, nowMillis = nowMillis)
-        return session.copy(sentAtMillis = nowMillis)
     }
 
     internal fun sendPhoneCode(

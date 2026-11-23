@@ -34,6 +34,7 @@ fun outputsJson(values: Iterable<OutputSummary>): JSONArray = JSONArray(
             .put("name", value.name)
             .put("size", value.size)
             .put("type", value.type)
+            .put("mtime", value.mtime)
     },
 )
 

@@ -33,11 +33,11 @@ internal class CoreRoutes(
         "/api/revision" -> HttpSupport.json(
             JSONObject().put("ok", true).put("revision", runtime.revision.get()),
         )
-        "/" -> staticAsset("index.html")
+        "/" -> staticAsset(session, "index.html")
         else -> when {
             path == "/img" -> imageProxy.serve(session)
             path.startsWith("/download/") -> download(path)
-            else -> staticAsset(path.removePrefix("/"))
+            else -> staticAsset(session, path.removePrefix("/"))
         }
     }
 
@@ -85,18 +85,43 @@ internal class CoreRoutes(
         return HttpSupport.file(file, file.name)
     }
 
-    private fun staticAsset(relativePath: String): NanoHTTPD.Response {
+    /** 每次安装/更新都会变，用来给本地 CSS/JS 做缓存版本。 */
+    @Suppress("DEPRECATION")
+    private val assetVersion: String by lazy {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime.toString(36)
+        }.getOrElse { System.currentTimeMillis().toString(36) }
+    }
+
+    /** 入口页只改写一次，避免每次请求都对整页 HTML 跑正则。 */
+    private val stampedIndex: ByteArray by lazy {
+        val raw = context.assets.open("cwm_bundle/web/index.html").use { it.readBytes() }
+        AssetVersioning.stamp(String(raw, Charsets.UTF_8), assetVersion).toByteArray(Charsets.UTF_8)
+    }
+
+    private fun staticAsset(session: NanoHTTPD.IHTTPSession, relativePath: String): NanoHTTPD.Response {
         val path = relativePath.ifBlank { "index.html" }
         if (path.startsWith('/') || path.contains("..") || path.contains('\\')) {
             return HttpSupport.error("路径无效", NanoHTTPD.Response.Status.FORBIDDEN)
         }
         return try {
-            val bytes = context.assets.open("cwm_bundle/web/$path").use { it.readBytes() }
-            HttpSupport.bytes(
-                bytes,
-                HttpSupport.mimeFor(path),
-                cacheControl = if (path == "index.html") "no-store" else "public, max-age=3600",
-            )
+            if (path == "index.html") {
+                // 入口页永远不缓存，但把带版本号的引用写进去。
+                HttpSupport.bytes(stampedIndex, HttpSupport.mimeFor(path))
+            } else {
+                val bytes = context.assets.open("cwm_bundle/web/$path").use { it.readBytes() }
+                // 版本号对得上才发长缓存；否则（旧链接、动态加载的库）不缓存。
+                val requested = session.queryParameterString
+                    ?.split('&')
+                    ?.firstOrNull { it.startsWith("v=") }
+                    ?.substring(2)
+                val cacheControl = if (requested == assetVersion) {
+                    "public, max-age=31536000, immutable"
+                } else {
+                    "no-store"
+                }
+                HttpSupport.bytes(bytes, HttpSupport.mimeFor(path), cacheControl)
+            }
         } catch (_: Exception) {
             HttpSupport.error("资源不存在", NanoHTTPD.Response.Status.NOT_FOUND)
         }

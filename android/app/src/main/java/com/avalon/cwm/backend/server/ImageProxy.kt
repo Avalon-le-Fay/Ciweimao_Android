@@ -41,7 +41,7 @@ internal class ImageProxy {
                 return HttpSupport.bytes(
                     cached.bytes,
                     cached.mimeType,
-                    cacheControl = "public, max-age=604800",
+                    cacheControl = "public, max-age=31536000, immutable",
                 )
             }
         }
@@ -57,7 +57,7 @@ internal class ImageProxy {
         return HttpSupport.bytes(
             image.bytes,
             image.mimeType,
-            cacheControl = "public, max-age=604800",
+            cacheControl = "public, max-age=31536000, immutable",
         )
     }
 

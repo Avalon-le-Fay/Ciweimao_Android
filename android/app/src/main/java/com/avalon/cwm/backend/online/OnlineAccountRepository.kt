@@ -31,28 +31,6 @@ class OnlineAccountRepository(
     @Volatile
     private var cachedClient: CiweimaoClient? = null
 
-    fun clientFor(account: JSONObject): CiweimaoClient {
-        val name = account.optString("account").trim()
-        val token = account.optString("login_token").trim()
-        require(name.isNotEmpty() && token.isNotEmpty()) { "账号凭据不完整" }
-        return createClient(name, token, account)
-    }
-
-    /** Activate a stored vault record for compatibility callers. */
-    fun activateStored(account: JSONObject): CiweimaoClient {
-        save(
-            account = account.optString("account").trim(),
-            loginToken = account.optString("login_token").trim(),
-            appVersion = account.optString("app_version"),
-            deviceContext = accountDeviceContext(account),
-            readerId = account.optString("reader_id"),
-            shelfId = account.optString("shelf_id"),
-            deviceToken = account.optString("device_token").ifBlank { CIWEIMAO_DEVICE_TOKEN },
-            transportBackend = account.optString("transport_backend").ifBlank { defaultTransport(account.optString("app_version")) },
-        )
-        return requireNotNull(cachedClient)
-    }
-
     fun load(): JSONObject = JsonFiles.readObject(accountFile) ?: JSONObject()
 
     fun save(
@@ -98,33 +76,6 @@ class OnlineAccountRepository(
         val token = account.optString("login_token").trim()
         if (name.isEmpty() || token.isEmpty()) return null
         return createClient(name, token, account).also { cachedClient = it }
-    }
-
-    fun installClient(
-        identity: JSONObject,
-        appVersion: String,
-        deviceContext: DeviceContext,
-        transportBackend: String = defaultTransport(appVersion),
-    ): CiweimaoClient {
-        val account = identity.optString("account").trim()
-        val token = identity.optString("login_token").trim()
-        require(account.isNotEmpty() && token.isNotEmpty()) {
-            "登录响应缺少 account 或 login_token"
-        }
-        val readerId = identity.optionalString("reader_id")
-        val shelfId = identity.optionalString("shelf_id")
-        save(
-            account = account,
-            loginToken = token,
-            appVersion = appVersion,
-            deviceContext = deviceContext,
-            readerId = readerId,
-            shelfId = shelfId,
-            deviceToken = identity.optString("device_token")
-                .ifBlank { CIWEIMAO_DEVICE_TOKEN },
-            transportBackend = transportBackend,
-        )
-        return requireNotNull(cachedClient)
     }
 
     fun accountDeviceContext(account: JSONObject = load()): DeviceContext =
@@ -261,11 +212,6 @@ class OnlineAccountRepository(
                 CIWEIMAO_TRANSPORT_OKHTTP
             }
     }
-}
-
-private fun JSONObject.optionalString(key: String): String {
-    val value = opt(key)
-    return if (value == null || value == JSONObject.NULL) "" else value.toString().trim()
 }
 
 fun stableOnlineError(error: Throwable): String = when (error) {

@@ -26,8 +26,6 @@ class OnlineTaskQueue(
         fun toJson(): JSONObject = JSONObject()
             .put("task_id", taskId)
             .put("verification", verification?.let { JSONObject(it.toString()) } ?: JSONObject.NULL)
-            .put("account_id", request.accountId)
-            .put("account_strategy", request.accountStrategy)
             .put("book_id", request.bookId)
             .put("name", resolvedName)
             .put("status", status)
@@ -59,8 +57,8 @@ class OnlineTaskQueue(
         var shouldStart = false
         var position = 0
         synchronized(lock) {
-            require(current?.let { it.request.accountId != request.accountId || it.request.bookId != request.bookId } ?: true || !running) { "该账号的这本书正在下载中" }
-            require(waiting.none { it.request.accountId == request.accountId && it.request.bookId == request.bookId }) { "该账号的这本书已在队列中" }
+            require(current?.request?.bookId != request.bookId) { "这本书正在下载中" }
+            require(waiting.none { it.request.bookId == request.bookId }) { "这本书已在队列中" }
             val record = TaskRecord(request)
             records += record
             waiting += record
@@ -88,7 +86,6 @@ class OnlineTaskQueue(
         val active = current
         JSONObject()
             .put("running", running)
-            .put("account_id", active?.request?.accountId.orEmpty())
             .put("book_id", active?.request?.bookId ?: JSONObject.NULL)
             .put("percent", active?.percent ?: 0)
             .put("message", active?.message.orEmpty())

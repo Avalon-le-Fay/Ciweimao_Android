@@ -18,18 +18,33 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '8.7'
+
+      - name: Check web/index.html for style leaks
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          html = open('web/index.html', encoding='utf-8').read()
+          body = re.sub(r'<style[\s\S]*?</style>', '', html)
+          body = re.sub(r'<script[\s\S]*?</script>', '', body)
+          markers = ['{--tb-ok', '.cwm-check{', '.chapter-row{', '#cover-viewer{', '.chapter-modal{']
+          hit = [m for m in markers if m in body]
+          if hit:
+              print('ERROR: CSS 泄漏到正文，检查是否漏了 <style> 标签:', hit)
+              sys.exit(1)
+          print('web/index.html OK')
+          PY
 
       - name: Build Debug APK
         run: |
@@ -52,7 +67,7 @@ jobs:
           exit "$STATUS"
 
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/*.apk

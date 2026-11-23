@@ -16,9 +16,6 @@ data class ChapterWallet private constructor(
     val effectiveHlb: BigDecimal?,
     val error: String?,
 ) {
-    fun canAfford(cost: BigDecimal): Boolean = cost.signum() >= 0 &&
-        (cost.signum() == 0 || effectiveHlb?.let { it >= cost } == true)
-
     /** Keep legacy hlb as the inclusive total; use explicit fields for the UI. */
     fun writeTo(output: JSONObject): JSONObject = output
         .put("hlb", totalHlb?.toPlainString() ?: JSONObject.NULL)

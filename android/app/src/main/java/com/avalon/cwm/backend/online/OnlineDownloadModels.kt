@@ -3,16 +3,12 @@ package com.avalon.cwm.backend.online
 import com.avalon.cwm.backend.core.ChapterSelection
 import org.json.JSONArray
 import org.json.JSONObject
-import java.math.BigDecimal
 
 data class OnlineDownloadRequest(
-    val accountId: String = "",
     val bookId: String,
     val displayName: String,
     val resume: Boolean,
     val selection: ChapterSelection?,
-    /** single = existing behavior; order/balance enable multi-account purchasing. */
-    val accountStrategy: String = "single",
 )
 
 data class PendingChapter(
@@ -32,11 +28,6 @@ data class OnlineBookResult(
     val pending: Int,
     val pendingChapters: List<PendingChapter>,
     val resumed: Int,
-    val accountId: String = "",
-    val accountLabel: String = "",
-    val accountStrategy: String = "single",
-    val purchaseCost: BigDecimal? = null,
-    val purchaseReport: JSONArray? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("name", name)
@@ -46,11 +37,6 @@ data class OnlineBookResult(
         .put("pending", pending)
         .put("pending_chaps", JSONArray(pendingChapters.map { listOf(it.sequence, it.title) }))
         .put("resumed", resumed)
-        .put("account_id", accountId)
-        .put("account", accountLabel)
-        .put("account_strategy", accountStrategy)
-        .put("purchase_cost", purchaseCost?.toPlainString() ?: JSONObject.NULL)
-        .put("purchase_report", purchaseReport ?: JSONObject.NULL)
 
     /**
      * Human-readable result, one concern per line.
@@ -76,23 +62,6 @@ data class OnlineBookResult(
         if (pending > 0) {
             val shown = pendingChapters.joinToString(",") { it.sequence.toString() }
             if (shown.isNotEmpty()) lines += "第${shown}章 审核未通过"
-        }
-        if (accountLabel.isNotBlank()) lines += "账号：$accountLabel"
-        if (purchaseCost != null && purchaseCost > BigDecimal.ZERO) {
-            lines += "购章预算 ${purchaseCost.stripTrailingZeros().toPlainString()} 币（猫饼干+代币）"
-        }
-        purchaseReport?.let { report ->
-            val groups = (0 until report.length()).mapNotNull { report.optJSONObject(it) }
-                .mapNotNull { item ->
-                    val ids = item.optJSONArray("chapter_ids") ?: return@mapNotNull null
-                    if (ids.length() == 0) return@mapNotNull null
-                    val shown = (0 until ids.length()).joinToString(",") { ids.optString(it) }
-                    item.optString("account").ifBlank { "账号" } + "：" + shown + "章"
-                }
-            if (groups.isNotEmpty()) {
-                lines += "分组购章"
-                lines += groups
-            }
         }
         return lines.joinToString("\n")
     }

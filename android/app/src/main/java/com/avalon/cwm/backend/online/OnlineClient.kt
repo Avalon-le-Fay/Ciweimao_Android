@@ -1,6 +1,5 @@
 package com.avalon.cwm.backend.online
 
-import com.avalon.cwm.backend.online.latest.LatestProtocol
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -10,9 +9,6 @@ class CiweimaoClient(
     val config: CiweimaoClientConfig = CiweimaoClientConfig(),
 ) {
     private val transport = CiweimaoTransport(config)
-
-    @Volatile
-    private var discoveredShelfId: String = config.shelfId.trim()
 
     internal fun call(
         path: String,
@@ -27,11 +23,10 @@ class CiweimaoClient(
         parameters["account"] = account
         parameters.putAll(data)
         if (config.isLatest && path.trimStart('/') == "reader/get_my_info") {
+            // 服务端不校验 reader_id：空值/乱填都会返回 token 所属账号的真实资料。
+            // 留空时不携带，checkLogin() 会从 reader_info 取回真值再由 activate 落库。
             val readerId = config.readerId.trim()
-            require(readerId.isNotEmpty()) {
-                "2.9.366 的 get_my_info 需要 reader_id"
-            }
-            parameters["reader_id"] = readerId
+            if (readerId.isNotEmpty()) parameters["reader_id"] = readerId
         }
         return DownloadRequestVerification.request(account, config, path, parameters) { proofFields ->
             transport.request(
@@ -123,20 +118,8 @@ class CiweimaoClient(
         )
         val shelves = response.optJSONObject("data")
             ?.optJSONArray("shelf_list") ?: JSONArray()
-        if (config.isLatest && discoveredShelfId.isBlank()) {
-            for (index in 0 until shelves.length()) {
-                val id = shelves.optJSONObject(index)
-                    ?.opt("shelf_id")?.toString()?.trim().orEmpty()
-                if (id.isNotEmpty()) {
-                    discoveredShelfId = id
-                    break
-                }
-            }
-        }
         return shelves
     }
-
-    fun discoveredShelf(): String = discoveredShelfId
 
     fun getShelfBooks(shelfId: String): JSONArray {
         require(shelfId.isNotBlank()) { "shelf_id 不能为空" }
@@ -238,136 +221,5 @@ class CiweimaoClient(
             method = "POST",
         ).optJSONObject("data")
             ?.optJSONArray("chapter_permission_list") ?: JSONArray()
-    }
-
-    /** Official multi-chapter subscription request (endpoint id 109). */
-    fun buyChapters(
-        chapterIds: List<String>,
-        isFull: Boolean = false,
-        shelfId: String = "",
-    ): JSONObject {
-        val ids = chapterIds.map(String::trim).filter(String::isNotBlank)
-        require(ids.isNotEmpty()) { "购买章节不能为空" }
-        val data = linkedMapOf<String, Any?>(
-            // ChaptersBuyTask serialises the Java List as a JSON-like numeric array,
-            // e.g. [115137222], not as a comma-separated form value.
-            "chapter_id_list" to ids.joinToString(", ", prefix = "[", postfix = "]"),
-            "is_full" to if (isFull) 1 else 0,
-        )
-        if (shelfId.isNotBlank()) data["shelf_id"] = shelfId
-        // A timeout has an unknown commit state. Never replay a purchase request.
-        return call("chapter/buy_multi", data, method = "POST", retries = 1)
-    }
-
-    /** Verified task endpoints used by the official client. */
-    fun signIn(proof: GeetestProof? = null): JSONObject = try {
-        val fields = linkedMapOf<String, Any?>("task_type" to 1)
-        proof?.let { fields.putAll(it.fields()) }
-        call("reader/get_task_bonus_with_sign_recommend", fields,
-            method = "POST", retries = 1)
-    } catch (error: CiweimaoApiException) {
-        if (error.code != "340001") throw error
-        JSONObject().put("code", error.code).put("tip", "今天已签到")
-    }
-
-    fun allTaskList(): JSONObject = call("task/get_all_task_list", method = "POST")
-        .optJSONObject("data")
-        ?: throw CiweimaoException("任务响应缺少 data，未把空数据当成已完成")
-
-    fun dailyTasks(): JSONArray = allTaskList().optJSONArray("daily_task_list")
-        ?: throw CiweimaoException("每日任务响应缺少 daily_task_list，未把空数据当成已完成")
-
-    /** Claim a server-confirmed completed challenge task; never fabricates progress. */
-    fun getChallengeTaskBonus(taskType: String): JSONObject {
-        require(taskType.isNotBlank()) { "挑战任务类型为空" }
-        return call("reader/get_challenge_task_bonus", mapOf("task_type" to taskType), method = "POST", retries = 1)
-    }
-
-    /** Claim a directly-openable weekly task chest. Ad-gated chests are filtered by the caller. */
-    fun getWeekTaskChestBonus(chestType: Int): JSONObject {
-        require(chestType in 1..3) { "宝箱类型无效" }
-        return call("reader/get_week_task_chest_bonus", mapOf("chest_type" to chestType), method = "POST", retries = 1)
-    }
-
-    fun openNoviceTaskChest(chestType: Int): JSONObject {
-        require(chestType in 1..3) { "宝箱类型无效" }
-        return call("reader/open_novioce_task_chest", mapOf("chest_type" to chestType), method = "POST", retries = 1)
-    }
-
-    fun submitReadingProgress(bookId: String, chapterId: String): JSONObject = call(
-        "reader/add_readbook",
-        mapOf("readTimes" to 1200, "getTime" to java.text.SimpleDateFormat(
-            "yyyy-MM-dd HH:mm:ss", java.util.Locale.US,
-        ).format(java.util.Date()), "book_id" to bookId, "chapter_id" to chapterId),
-        method = "POST",
-    )
-
-    fun readAreaProgress(): JSONObject = call(
-        "bbs/add_bbs_read_time",
-        mapOf("readTimes" to 300, "getTime" to java.text.SimpleDateFormat(
-            "yyyy-MM-dd HH:mm:ss", java.util.Locale.US,
-        ).format(java.util.Date())),
-        method = "POST",
-    )
-
-    fun shareIllustrationPost(postId: String): JSONObject = call(
-        "bbs/share_bbs", mapOf("bbs_id" to postId), method = "POST",
-    )
-
-    /** Returns the raw illustration-area post list; callers filter is_like themselves. */
-    fun illustrationPostList(page: Int = 0, count: Int = 10, order: String = "2"): JSONArray =
-        call(
-            "bbs/get_bbs_list",
-            mapOf("bbs_type" to 5, "order" to order, "count" to count, "page" to page),
-            method = "POST",
-        ).optJSONObject("data")?.optJSONArray("bbs_list") ?: JSONArray()
-
-    /** Real like mutation. It is intentionally one-shot: never replay an uncertain write. */
-    fun likeBbs(bbsId: String): JSONObject {
-        require(bbsId.isNotBlank()) { "帖子 ID 为空" }
-        return call("bbs/like_bbs", mapOf("bbs_id" to bbsId), method = "POST", retries = 1)
-    }
-
-    /** Real comment mutation using the official comment fields and one-shot semantics. */
-    fun addBbsComment(bbsId: String, content: String): JSONObject {
-        require(bbsId.isNotBlank() && content.isNotBlank()) { "评论参数不完整" }
-        return call(
-            "bbs/add_bbs_comment",
-            mapOf(
-                "bbs_id" to bbsId,
-                "comment_content" to content,
-                "is_combo" to 0,
-                "combo_type" to 0,
-            ),
-            method = "POST",
-            retries = 1,
-        )
-    }
-
-    fun searchBooks(keyword: String, page: Int = 0, count: Int = 15): JSONArray {
-        val source = call(
-            "bookcity/get_filter_search_book_list",
-            mapOf(
-                "count" to count,
-                "page" to page,
-                "use_daguan" to 1,
-                "category_index" to 0,
-                "key" to keyword,
-            ),
-            method = if (config.isLatest) "POST" else "GET",
-        ).optJSONObject("data")?.optJSONArray("book_list") ?: JSONArray()
-        val output = JSONArray()
-        for (index in 0 until source.length()) {
-            val book = source.optJSONObject(index) ?: continue
-            output.put(
-                JSONObject()
-                    .put("book_id", book.opt("book_id") ?: JSONObject.NULL)
-                    .put("book_name", book.optString("book_name"))
-                    .put("author_name", book.optString("author_name"))
-                    .put("cover", book.optString("cover"))
-                    .put("total_word_count", book.opt("total_word_count") ?: ""),
-            )
-        }
-        return output
     }
 }

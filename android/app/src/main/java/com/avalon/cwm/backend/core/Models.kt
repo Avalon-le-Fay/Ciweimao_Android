@@ -53,6 +53,8 @@ data class OutputSummary(
     val name: String,
     val size: Long,
     val type: String,
+    /** Last write time (epoch millis): the generated file's "download finished" stamp. */
+    val mtime: Long = 0L,
 )
 
 enum class ChapterAccess(val wireValue: String) {
