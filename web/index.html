@@ -2668,6 +2668,7 @@ const _panelStage=document.getElementById('panel-stage');
 })();
 let _tabSwitching=false;
 let _tabRepeatAnim=null;
+let _tabEnterAnim=null;
 function repeatActivePanel(panel){
   if(!panel||!panel.animate) return;
   if(_tabRepeatAnim){ try{_tabRepeatAnim.cancel()}catch(e){} }
@@ -2691,15 +2692,17 @@ async function switchMainTab(tab){
   if(_tabSwitching) return;
   _tabSwitching=true;
   if(_tabRepeatAnim){ try{_tabRepeatAnim.cancel()}catch(e){} _tabRepeatAnim=null; }
+  if(_tabEnterAnim){ try{_tabEnterAnim.cancel()}catch(e){} _tabEnterAnim=null; }
   const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const orderedTabs=Array.from(document.querySelectorAll('.tabs .tab'));
+  const dir=orderedTabs.indexOf(tab)>=orderedTabs.indexOf(oldTab)?1:-1;
   oldTab.classList.remove('active');tab.classList.add('active');moveInd(tab);if(typeof window.playMenuTabEffect==='function')window.playMenuTabEffect(tab,false);
-  // 瞬时换页 + 新页轻微落位：旧页立刻隐藏（两页同时半透明会叠出重影），
-  // 只动新页一层，也不做整页高度动画。
+  // 瞬时换页 + 新页方向轻落位：旧页立刻隐藏，只动新页一层，零叠页零掉帧。
   oldPanel.classList.remove('active');
   newPanel.classList.add('active');
   if(!reduce&&newPanel.animate){
-    newPanel.animate(
-      [{opacity:.9,transform:'translateY(10px)'},{opacity:1,transform:'translateY(0)'}],
+    _tabEnterAnim=newPanel.animate(
+      [{opacity:.88,transform:'translate3d('+(dir*24)+'px,0,0)'},{opacity:1,transform:'translate3d(0,0,0)'}],
       {duration:200,easing:'cubic-bezier(.22,1,.36,1)'}
     );
   }
@@ -2813,6 +2816,134 @@ if(_tabsWrap){
   window.addEventListener('load',moveIndToActive);
   requestAnimationFrame(moveIndToActive);
 }
+
+// ===== 全屏左右轻滑切页：全 passive 监听，直接复用原版 switchMainTab 单层切页动效 =====
+(function installSimpleMainSwipe(){
+  const EDGE_SAFE_PX=16;
+  const MIN_SWIPE_PX=48;
+  const FAST_SWIPE_PX=32;
+  const FAST_SWIPE_MS=280;
+  const OVERLAY_CHECKS=[
+    ['firstrun-overlay','open'],
+    ['settings-overlay','open'],
+    ['cover-viewer','show'],
+    ['chap-modal','show'],
+    ['dl-sheet','show'],
+    ['accent-picker-overlay','open'],
+    ['cfm-mask','show'],
+    ['network-address-region','open']
+  ];
+  let start=null;
+  let suppressClickUntil=0;
+
+  function hasOpenOverlay(){
+    for(let i=0;i<OVERLAY_CHECKS.length;i++){
+      const el=document.getElementById(OVERLAY_CHECKS[i][0]);
+      if(el&&el.classList.contains(OVERLAY_CHECKS[i][1])) return true;
+    }
+    const expMenu=document.getElementById('export-options-menu');
+    return !!(expMenu&&!expMenu.hidden);
+  }
+  function hasHorizontalScroller(target){
+    let node=target;
+    while(node&&node!==document.body&&node!==document.documentElement){
+      if(node.nodeType===1){
+        const ox=window.getComputedStyle(node).overflowX;
+        if((ox==='auto'||ox==='scroll')&&node.scrollWidth>node.clientWidth+2) return true;
+      }
+      node=node.parentNode;
+    }
+    return false;
+  }
+  function shouldIgnore(e){
+    if(!e.touches||e.touches.length!==1) return true;
+    if(_tabSwitching||_cacheViewSwitching) return true;
+    if(document.documentElement.getAttribute('data-keyboard-open')==='true') return true;
+    if(hasOpenOverlay()) return true;
+    const t=e.touches[0];
+    const vw=window.innerWidth||document.documentElement.clientWidth;
+    if(t.clientX<=EDGE_SAFE_PX||t.clientX>=vw-EDGE_SAFE_PX) return true;
+    const raw=e.target;
+    const el=raw&&raw.nodeType===1?raw:(raw&&raw.parentElement);
+    if(!el||!el.closest) return true;
+    if(el.closest('.titlebar,#dn,#dl-fab,.tabs,#floatbar,#dl-float,input,textarea,select,[contenteditable="true"],#custom-color-wheel,[data-no-swipe]')){
+      return true;
+    }
+    if(window.getSelection&&String(window.getSelection()).length>0) return true;
+    if(hasHorizontalScroller(el)) return true;
+    return false;
+  }
+
+  document.addEventListener('touchstart',function(e){
+    if(shouldIgnore(e)){start=null;return;}
+    const t=e.touches[0];
+    start={x:t.clientX,y:t.clientY,t:Date.now(),lock:null};
+  },{passive:true});
+
+  document.addEventListener('touchmove',function(e){
+    if(!start) return;
+    if(!e.touches||e.touches.length!==1){start=null;return;}
+    if(start.lock) return;
+    const t=e.touches[0];
+    const adx=Math.abs(t.clientX-start.x);
+    const ady=Math.abs(t.clientY-start.y);
+    if(adx<10&&ady<10) return;
+    if(adx>ady*1.15){
+      start.lock='h';
+      if(typeof finishCardPointer==='function'){try{finishCardPointer(e,true);}catch(err){}}
+    }else{
+      start.lock='v';
+    }
+  },{passive:true});
+
+  document.addEventListener('touchend',function(e){
+    const s=start;
+    start=null;
+    if(!s||s.lock==='v'||!e.changedTouches||!e.changedTouches[0]) return;
+    const t=e.changedTouches[0];
+    const dx=t.clientX-s.x;
+    const dy=t.clientY-s.y;
+    const adx=Math.abs(dx), ady=Math.abs(dy);
+    const dt=Date.now()-s.t;
+    const ok=(adx>=MIN_SWIPE_PX||(dt<=FAST_SWIPE_MS&&adx>=FAST_SWIPE_PX))&&adx>ady*1.15;
+    if(!ok) return;
+
+    suppressClickUntil=Date.now()+300;
+    const tabs=Array.from(document.querySelectorAll('.tabs .tab'));
+    const activeTab=document.querySelector('.tab.active');
+    const activeIdx=tabs.indexOf(activeTab);
+    if(activeIdx<0) return;
+
+    // 解密缓存二级「导入设置」页：右滑返回列表，左滑轻回弹不切走
+    if(activeTab.dataset.tab==='local'&&typeof currentCacheView==='function'&&currentCacheView()==='import'){
+      if(dx>0&&typeof switchCacheView==='function') switchCacheView('local');
+      else repeatActivePanel(document.querySelector('.panel.active'));
+      return;
+    }
+
+    const nextIdx=activeIdx+(dx<0?1:-1);
+    if(nextIdx<0||nextIdx>=tabs.length){
+      repeatActivePanel(document.querySelector('.panel.active'));
+      return;
+    }
+    const targetTab=tabs[nextIdx];
+    if(targetTab.dataset.tab==='local'&&typeof activateDecryptCacheTab==='function'){
+      activateDecryptCacheTab(targetTab);
+    }else{
+      switchMainTab(targetTab);
+    }
+  },{passive:true});
+
+  document.addEventListener('touchcancel',function(){start=null;},{passive:true});
+
+  document.addEventListener('click',function(e){
+    if(Date.now()<suppressClickUntil){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+  },true);
+})();
 
 function esc(s){
   return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
