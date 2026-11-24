@@ -1178,7 +1178,7 @@ html[data-theme="dark"] .export-option:hover,html[data-theme="dark"] .export-opt
 #out-dir-card.touch-glow::before{opacity:0!important}
 
 /* 主标签页面：2 · 方向滑动。毛玻璃不关闭，旧页与新页交叉切换。 */
-.panel-stage{position:relative;min-width:0}
+.panel-stage{position:relative;min-width:0;overflow-x:clip}
 .panel-stage .panel.active{display:flow-root;animation:none!important}
 .panel-stage .panel.tab-transitioning{display:flow-root}
 .panel-stage.tab-animating{overflow:hidden;overflow-anchor:none}
@@ -2702,7 +2702,7 @@ async function switchMainTab(tab){
   newPanel.classList.add('active');
   if(!reduce&&newPanel.animate){
     _tabEnterAnim=newPanel.animate(
-      [{opacity:.88,transform:'translate3d('+(dir*24)+'px,0,0)'},{opacity:1,transform:'translate3d(0,0,0)'}],
+      [{opacity:.88,transform:'translate3d('+(dir*16)+'px,0,0)'},{opacity:1,transform:'translate3d(0,0,0)'}],
       {duration:200,easing:'cubic-bezier(.22,1,.36,1)'}
     );
   }
@@ -2828,7 +2828,9 @@ if(_tabsWrap){
     ['settings-overlay','open'],
     ['cover-viewer','show'],
     ['chap-modal','show'],
+    ['chap-modal','is-closing'],
     ['dl-sheet','show'],
+    ['dl-sheet','closing'],
     ['accent-picker-overlay','open'],
     ['cfm-mask','show'],
     ['network-address-region','open']
