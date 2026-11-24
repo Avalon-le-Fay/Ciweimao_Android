@@ -297,6 +297,7 @@ class OutputRepository(
         removeGeneratedDirectory(paths.chapterOutput, stem, "txt/$stem", purged)
         removeGeneratedDirectory(paths.textCache, stem, "cache/texts/$stem", purged)
         removeGeneratedDirectory(paths.imageCache, stem, "cache/images/$stem", purged)
+        File(paths.imageCache, ".$stem.urlmap.json").delete()
         bookIdForSafeName(stem)?.let { bookId ->
             removeGeneratedDirectory(paths.outputCache, bookId, "cache/$bookId", purged)
         }

@@ -3,16 +3,21 @@ package com.avalon.cwm.backend.export
 import com.avalon.cwm.backend.core.Book
 import com.avalon.cwm.backend.core.Chapter
 import com.avalon.cwm.backend.core.FileTools
+import com.avalon.cwm.backend.core.JsonFiles
 import com.avalon.cwm.backend.net.WebContentClient
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Entities
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import java.util.zip.CRC32
+import java.util.zip.Deflater
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -26,6 +31,13 @@ class EpubWriter(
         val href: String,
         val mime: String,
         val bytes: ByteArray,
+    )
+
+    private data class FetchedImage(
+        val url: String,
+        val bytes: ByteArray,
+        val type: FileTools.ImageType,
+        val cachedFile: File?,
     )
 
     /** 一个分卷在 EPUB 里的独立标题页（目录里可点，正文里分页）。 */
@@ -67,30 +79,48 @@ class EpubWriter(
         val chapterSources = divisions.flatMap { it.chapters }
         val imageUrls = linkedSetOf<String>()
         chapterSources.forEach { chapter -> imageUrls += extractImageUrls(chapter.content) }
+        val urlMapFile = imageCache?.parentFile?.let { parent ->
+            File(parent, ".${imageCache.name}.urlmap.json")
+        }
+        val cachedUrlMap = readUrlMap(urlMapFile)
+        val fetchedImages: List<FetchedImage?> = when {
+            imageUrls.isEmpty() -> emptyList()
+            imageUrls.size == 1 -> imageUrls.map { url -> fetchImage(url, imageCache, cachedUrlMap) }
+            else -> {
+                val pool = Executors.newFixedThreadPool(minOf(IMAGE_FETCH_THREADS, imageUrls.size))
+                try {
+                    val tasks = imageUrls.map { url ->
+                        Callable { fetchImage(url, imageCache, cachedUrlMap) }
+                    }
+                    pool.invokeAll(tasks).map { future -> runCatching { future.get() }.getOrNull() }
+                } finally {
+                    pool.shutdownNow()
+                }
+            }
+        }
         val imagesByUrl = linkedMapOf<String, ImageAsset>()
-        imageUrls.forEach { url ->
-            val bytes = try {
-                web.getBytes(url)
-            } catch (_: Exception) {
-                byteArrayOf()
-            }
-            if (bytes.isEmpty()) return@forEach
-            val type = try {
-                FileTools.detectImage(bytes)
-            } catch (_: Exception) {
-                return@forEach
-            }
+        val nextUrlMap = JSONObject()
+        fetchedImages.forEach { item ->
+            if (item == null) return@forEach
             val index = imagesByUrl.size
+            val filename = "img_$index.${item.type.extension}"
             val asset = ImageAsset(
                 id = "img_$index",
-                href = "images/img_$index.${type.extension}",
-                mime = type.mime,
-                bytes = bytes,
+                href = "images/$filename",
+                mime = item.type.mime,
+                bytes = item.bytes,
             )
-            imagesByUrl[url] = asset
+            imagesByUrl[item.url] = asset
             imageCache?.let { cache ->
-                runCatching { File(cache, "img_$index.${type.extension}").writeBytes(bytes) }
+                val targetFile = File(cache, filename)
+                if (item.cachedFile == null || item.cachedFile.name != filename || !targetFile.isFile) {
+                    runCatching { targetFile.writeBytes(item.bytes) }
+                }
+                nextUrlMap.put(item.url, filename)
             }
+        }
+        if (urlMapFile != null && nextUrlMap.length() > 0) {
+            runCatching { JsonFiles.write(urlMapFile, nextUrlMap) }
         }
 
         var chapterIndex = 0
@@ -124,17 +154,18 @@ class EpubWriter(
         val identifier = "ciweimao_${book.id}_${UUID.randomUUID()}"
         val temporary = File(destination.parentFile, ".${destination.name}.${System.nanoTime()}.tmp")
         try {
-            ZipOutputStream(FileOutputStream(temporary)).use { zip ->
+            ZipOutputStream(BufferedOutputStream(FileOutputStream(temporary), ZIP_BUFFER_SIZE)).use { zip ->
+                zip.setLevel(Deflater.BEST_SPEED)
                 putStored(zip, "mimetype", "application/epub+zip".toByteArray(StandardCharsets.US_ASCII))
                 putText(zip, "META-INF/container.xml", containerXml())
                 putText(zip, "OEBPS/styles/book.css", stylesheet())
                 book.cover.takeIf { it.isNotEmpty() }?.let { cover ->
                     runCatching { FileTools.detectImage(cover) }.getOrNull()?.let { type ->
-                        putBytes(zip, "OEBPS/images/cover.${type.extension}", cover)
+                        putStored(zip, "OEBPS/images/cover.${type.extension}", cover)
                     }
                 }
                 imagesByUrl.values.forEach { image ->
-                    putBytes(zip, "OEBPS/${image.href}", image.bytes)
+                    putStored(zip, "OEBPS/${image.href}", image.bytes)
                 }
                 sections.forEach { section ->
                     section.volume?.let { volume ->
@@ -156,7 +187,56 @@ class EpubWriter(
         return Result(chapters.size, imagesByUrl.size)
     }
 
+    private fun readUrlMap(file: File?): Map<String, String> {
+        val json = file?.let(JsonFiles::readObject) ?: return emptyMap()
+        return buildMap {
+            json.keys().forEach { key ->
+                val name = json.optString(key).trim()
+                if (name.isNotEmpty() && '/' !in name && '\\' !in name && name != "." && name != "..") {
+                    put(key, name)
+                }
+            }
+        }
+    }
+
+    private fun fetchImage(
+        url: String,
+        imageCache: File?,
+        cachedUrlMap: Map<String, String>,
+    ): FetchedImage? {
+        if (imageCache != null) {
+            val cachedName = cachedUrlMap[url]
+            if (cachedName != null) {
+                val cachedFile = File(imageCache, cachedName)
+                if (cachedFile.isFile && !FileTools.isSymbolicLink(cachedFile)) {
+                    val bytes = runCatching { cachedFile.readBytes() }.getOrNull()
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        val type = runCatching { FileTools.detectImage(bytes) }.getOrNull()
+                        if (type != null) {
+                            return FetchedImage(url, bytes, type, cachedFile)
+                        }
+                    }
+                }
+            }
+        }
+        val bytes = try {
+            web.getBytes(url)
+        } catch (_: Exception) {
+            return null
+        }
+        if (bytes.isEmpty()) return null
+        val type = try {
+            FileTools.detectImage(bytes)
+        } catch (_: Exception) {
+            return null
+        }
+        return FetchedImage(url, bytes, type, cachedFile = null)
+    }
+
     private fun extractImageUrls(raw: String): List<String> {
+        if (!raw.contains("<img", ignoreCase = true) && !raw.contains("<Book")) {
+            return emptyList()
+        }
         val document = Jsoup.parseBodyFragment(replaceBookTags(raw))
         return document.select("img[src]").mapNotNull { image ->
             image.attr("src").trim().takeIf { it.startsWith("http://") || it.startsWith("https://") }
@@ -168,6 +248,11 @@ class EpubWriter(
         raw: String,
         images: Map<String, ImageAsset>,
     ): String {
+        if ('<' !in raw) {
+            val markup = raw.lines().map(String::trim).filter(String::isNotEmpty)
+                .joinToString("") { "<p>${escape(it)}</p>" }
+            return "<h1>${escape(title)}</h1>$markup"
+        }
         val document = Jsoup.parseBodyFragment(replaceBookTags(raw))
         document.outputSettings()
             .syntax(Document.OutputSettings.Syntax.xml)
@@ -462,4 +547,8 @@ class EpubWriter(
 
     private fun xmlHeader(): String = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 
+    companion object {
+        private const val IMAGE_FETCH_THREADS = 4
+        private const val ZIP_BUFFER_SIZE = 64 * 1024
+    }
 }
