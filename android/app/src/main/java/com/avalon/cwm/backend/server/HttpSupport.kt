@@ -4,6 +4,7 @@ import fi.iki.elonen.NanoHTTPD
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.BufferedInputStream
 import java.io.FileInputStream
 import java.net.URLEncoder
 import java.util.Locale
@@ -108,11 +109,14 @@ object HttpSupport {
         val response = NanoHTTPD.newFixedLengthResponse(
             NanoHTTPD.Response.Status.OK,
             mimeType,
-            if (deleteOnClose || onClose != null) {
-                ManagedFileInputStream(source, deleteOnClose, onClose)
-            } else {
-                FileInputStream(source)
-            },
+            BufferedInputStream(
+                if (deleteOnClose || onClose != null) {
+                    ManagedFileInputStream(source, deleteOnClose, onClose)
+                } else {
+                    FileInputStream(source)
+                },
+                64 * 1024,
+            ),
             source.length(),
         )
         if (attachment) {

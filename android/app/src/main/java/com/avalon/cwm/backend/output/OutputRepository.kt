@@ -10,6 +10,11 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.Collections
+import java.util.Locale
+import java.util.concurrent.Callable
+import java.util.zip.CRC32
+import java.util.zip.Deflater
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -136,7 +141,8 @@ class OutputRepository(
         val archive = File.createTempFile("cwm-outputs-", ".zip", paths.root)
         try {
             val plan = optionalPlan(files, options)
-            ZipOutputStream(archive.outputStream().buffered()).use { zip ->
+            ZipOutputStream(archive.outputStream().buffered(IO_BUFFER_SIZE)).use { zip ->
+                zip.setLevel(Deflater.BEST_SPEED)
                 files.forEach { selected ->
                     addZipFile(zip, selected.name, selected.file)
                 }
@@ -227,9 +233,41 @@ class OutputRepository(
         require(name.isNotBlank() && !name.startsWith("../") && "/../" !in name) {
             "归档路径无效"
         }
-        zip.putNextEntry(ZipEntry(name))
-        source.inputStream().buffered().use { input -> input.copyTo(zip) }
-        zip.closeEntry()
+        val ext = source.extension.lowercase(Locale.ROOT)
+        if (ext in PRECOMPRESSED_EXTENSIONS) {
+            val size = source.length()
+            val crc = computeCrc32(source)
+            val entry = ZipEntry(name).apply {
+                method = ZipEntry.STORED
+                this.size = size
+                compressedSize = size
+                this.crc = crc
+            }
+            zip.putNextEntry(entry)
+            source.inputStream().buffered(IO_BUFFER_SIZE).use { input ->
+                input.copyTo(zip, bufferSize = IO_BUFFER_SIZE)
+            }
+            zip.closeEntry()
+        } else {
+            zip.putNextEntry(ZipEntry(name))
+            source.inputStream().buffered(IO_BUFFER_SIZE).use { input ->
+                input.copyTo(zip, bufferSize = IO_BUFFER_SIZE)
+            }
+            zip.closeEntry()
+        }
+    }
+
+    private fun computeCrc32(source: File): Long {
+        val crc = CRC32()
+        val buffer = ByteArray(IO_BUFFER_SIZE)
+        source.inputStream().use { input ->
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                crc.update(buffer, 0, read)
+            }
+        }
+        return crc.value
     }
 
     fun deleteOutputs(rawNames: Iterable<Any?>): JSONObject {
@@ -331,19 +369,47 @@ class OutputRepository(
                     .onFailure { optionalFailed += relative }
             }
         }
-        plan.entries.forEach { entry ->
-            val target = File(destination, entry.archivePath)
-            if (!FileTools.isWithin(target, destination) ||
-                FileTools.isWithin(entry.source, destination)
-            ) {
-                optionalFailed += entry.archivePath
-            } else {
-                try {
-                    FileTools.copyVerified(entry.source, target)
-                    optionalCopied += entry.archivePath
-                } catch (_: Exception) {
+        if (plan.entries.size <= 1) {
+            plan.entries.forEach { entry ->
+                val target = File(destination, entry.archivePath)
+                if (!FileTools.isWithin(target, destination) ||
+                    FileTools.isWithin(entry.source, destination)
+                ) {
                     optionalFailed += entry.archivePath
+                } else {
+                    try {
+                        FileTools.copyVerified(entry.source, target)
+                        optionalCopied += entry.archivePath
+                    } catch (_: Exception) {
+                        optionalFailed += entry.archivePath
+                    }
                 }
+            }
+        } else {
+            val syncCopied = Collections.synchronizedList(optionalCopied)
+            val syncFailed = Collections.synchronizedList(optionalFailed)
+            val pool = Executors.newFixedThreadPool(minOf(EXPORT_COPY_THREADS, plan.entries.size))
+            try {
+                val tasks = plan.entries.map { entry ->
+                    Callable {
+                        val target = File(destination, entry.archivePath)
+                        if (!FileTools.isWithin(target, destination) ||
+                            FileTools.isWithin(entry.source, destination)
+                        ) {
+                            syncFailed += entry.archivePath
+                        } else {
+                            try {
+                                FileTools.copyVerified(entry.source, target)
+                                syncCopied += entry.archivePath
+                            } catch (_: Exception) {
+                                syncFailed += entry.archivePath
+                            }
+                        }
+                    }
+                }
+                pool.invokeAll(tasks).forEach { future -> runCatching { future.get() } }
+            } finally {
+                pool.shutdownNow()
             }
         }
 
@@ -388,5 +454,10 @@ class OutputRepository(
     companion object {
         private const val PREPARED_TTL_MILLIS = 10L * 60L * 1000L
         private const val TRANSFER_CLOSE_GRACE_MILLIS = 60L * 1000L
+        private const val IO_BUFFER_SIZE = 64 * 1024
+        private const val EXPORT_COPY_THREADS = 4
+        private val PRECOMPRESSED_EXTENSIONS = setOf(
+            "epub", "jpg", "jpeg", "png", "webp", "gif", "zip", "heic", "heif",
+        )
     }
 }

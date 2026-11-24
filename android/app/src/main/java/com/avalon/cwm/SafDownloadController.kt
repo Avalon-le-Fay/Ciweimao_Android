@@ -2,6 +2,7 @@ package com.avalon.cwm
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,6 +22,10 @@ class SafDownloadController(
     private val worker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "cwm-saf-download")
     }
+    /** 封面下载独立通道，避免被大文件批量下载任务阻塞。 */
+    private val coverWorker = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "cwm-saf-cover")
+    }
     private val baseUrl = URL("http://127.0.0.1:8080/")
 
     fun downloadOutputs(treeUri: Uri, namesJson: String, optionsJson: String) {
@@ -30,15 +35,18 @@ class SafDownloadController(
                 val options = runCatching { JSONObject(optionsJson) }.getOrDefault(JSONObject())
                 require(names.isNotEmpty()) { "未选择要下载的文件" }
                 onEvent(JSONObject().put("type", "started").put("count", names.size).put("batch", true))
+                val tree = requireWritableTree(treeUri)
+                val existingNames = queryExistingNames(treeUri)
                 val saved = if (options.optBoolean("chapters") || options.optBoolean("images")) {
                     val prepared = prepareArchive(names, options)
                     val filename = prepared.optString("filename", "cwm-outputs.zip")
-                    listOf(saveUrl(treeUri, prepared.getString("url"), filename, "application/zip"))
+                    listOf(saveUrl(tree, existingNames, prepared.getString("url"), filename, "application/zip"))
                         .also { runCatching { confirmPrepared(prepared.getString("url")) } }
                 } else {
                     names.map { name ->
                         saveUrl(
-                            treeUri,
+                            tree,
+                            existingNames,
                             "/download/${encodePathSegment(name)}",
                             name,
                             mimeForName(name),
@@ -51,7 +59,7 @@ class SafDownloadController(
                         .put("files", JSONArray(saved))
                         .put("batch", true)
                         .put("clear_selection", true)
-                        .put("directory", directoryLabel(treeUri)),
+                        .put("directory", directoryLabel(tree)),
                 )
             } catch (error: Throwable) {
                 onEvent(
@@ -73,7 +81,9 @@ class SafDownloadController(
         worker.execute {
             try {
                 onEvent(JSONObject().put("type", "started").put("count", 1).put("batch", false))
-                val saved = saveUrl(treeUri, url, filename, mimeType ?: mimeForName(filename))
+                val tree = requireWritableTree(treeUri)
+                val existingNames = queryExistingNames(treeUri)
+                val saved = saveUrl(tree, existingNames, url, filename, mimeType ?: mimeForName(filename))
                 preparedToken(url)?.let { runCatching { confirmPreparedToken(it) } }
                 onEvent(
                     JSONObject()
@@ -81,7 +91,7 @@ class SafDownloadController(
                         .put("files", JSONArray(listOf(saved)))
                         .put("batch", false)
                         .put("clear_selection", false)
-                        .put("directory", directoryLabel(treeUri)),
+                        .put("directory", directoryLabel(tree)),
                 )
             } catch (error: Throwable) {
                 onEvent(
@@ -96,8 +106,38 @@ class SafDownloadController(
 
     fun directoryLabel(treeUri: Uri): String {
         val tree = DocumentFile.fromTreeUri(appContext, treeUri)
-        return tree?.name?.takeIf { it.isNotBlank() } ?: "已选择目录"
+        return directoryLabel(tree)
     }
+
+    private fun directoryLabel(tree: DocumentFile?): String =
+        tree?.name?.takeIf { it.isNotBlank() } ?: "已选择目录"
+
+    private fun requireWritableTree(treeUri: Uri): DocumentFile {
+        val tree = DocumentFile.fromTreeUri(appContext, treeUri)
+            ?: error("下载目录授权已失效，请重新选择目录")
+        require(tree.isDirectory && tree.canWrite()) { "下载目录不可写，请重新选择目录" }
+        return tree
+    }
+
+    /**
+     * 通过 ContentResolver 单次查询目录内全部文件名并缓存在内存 HashSet 中，
+     * 避免 DocumentFile.findFile() 每次 O(N) 全目录遍历拖慢 SAF 写入。
+     */
+    private fun queryExistingNames(treeUri: Uri): MutableSet<String>? = runCatching {
+        val documentId = DocumentsContract.getTreeDocumentId(treeUri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
+        val projection = arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+        val names = HashSet<String>(64)
+        appContext.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            val nameIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            if (nameIdx >= 0) {
+                while (cursor.moveToNext()) {
+                    cursor.getString(nameIdx)?.let(names::add)
+                }
+            }
+        } ?: return null
+        names
+    }.getOrNull()
 
     private fun prepareArchive(names: List<String>, options: JSONObject): JSONObject {
         val payload = JSONObject().put("names", JSONArray(names)).put("options", options)
@@ -122,7 +162,7 @@ class SafDownloadController(
      * （图床的 Content-Type 经常是 octet-stream，按扩展名命名会存出打不开的文件。）
      */
     fun downloadCover(treeUri: Uri, url: String, baseName: String) {
-        worker.execute {
+        coverWorker.execute {
             try {
                 onEvent(JSONObject().put("type", "started").put("count", 1).put("batch", false))
                 val connection = open(url, "GET")
@@ -135,14 +175,16 @@ class SafDownloadController(
                     connection.disconnect()
                 }
                 require(bytes.isNotEmpty()) { "封面内容为空" }
-                val saved = saveBytes(treeUri, baseName, bytes)
+                val tree = requireWritableTree(treeUri)
+                val existingNames = queryExistingNames(treeUri)
+                val saved = saveBytes(tree, existingNames, baseName, bytes)
                 onEvent(
                     JSONObject()
                         .put("type", "completed")
                         .put("files", JSONArray(listOf(saved)))
                         .put("batch", false)
                         .put("clear_selection", false)
-                        .put("directory", directoryLabel(treeUri)),
+                        .put("directory", directoryLabel(tree)),
                 )
             } catch (error: Throwable) {
                 onEvent(
@@ -155,14 +197,16 @@ class SafDownloadController(
         }
     }
 
-    private fun saveBytes(treeUri: Uri, requestedName: String, bytes: ByteArray): String {
-        val tree = DocumentFile.fromTreeUri(appContext, treeUri)
-            ?: error("下载目录授权已失效，请重新选择目录")
-        require(tree.isDirectory && tree.canWrite()) { "下载目录不可写，请重新选择目录" }
+    private fun saveBytes(
+        tree: DocumentFile,
+        existingNames: MutableSet<String>?,
+        requestedName: String,
+        bytes: ByteArray,
+    ): String {
         val type = ImageSniffer.sniff(bytes)
         val safeBase = requestedName.replace('/', ' ').replace(92.toChar(), ' ').trim()
             .ifBlank { "封面" }
-        val targetName = uniqueName(tree, "$safeBase.${type.extension}")
+        val targetName = uniqueName(tree, "$safeBase.${type.extension}", existingNames)
         val target = tree.createFile(type.mimeType, targetName)
             ?: error("无法在所选目录创建文件")
         try {
@@ -174,21 +218,21 @@ class SafDownloadController(
             target.delete()
             throw error
         }
-        return target.name ?: targetName
+        val finalName = target.name ?: targetName
+        existingNames?.add(finalName)
+        return finalName
     }
 
     private fun saveUrl(
-        treeUri: Uri,
+        tree: DocumentFile,
+        existingNames: MutableSet<String>?,
         relativeUrl: String,
         requestedName: String,
         mimeType: String,
     ): String {
-        val tree = DocumentFile.fromTreeUri(appContext, treeUri)
-            ?: error("下载目录授权已失效，请重新选择目录")
-        require(tree.isDirectory && tree.canWrite()) { "下载目录不可写，请重新选择目录" }
         val safeName = requestedName.replace('/', ' ').replace(92.toChar(), ' ').trim()
             .ifBlank { "download" }
-        val targetName = uniqueName(tree, safeName)
+        val targetName = uniqueName(tree, safeName, existingNames)
         val target = tree.createFile(mimeType, targetName)
             ?: error("无法在所选目录创建文件")
         val connection = open(relativeUrl, "GET")
@@ -197,10 +241,12 @@ class SafDownloadController(
                 error("下载请求失败：HTTP ${connection.responseCode}")
             }
             appContext.contentResolver.openOutputStream(target.uri, "w")?.use { output ->
-                connection.inputStream.use { input -> input.copyTo(output) }
+                connection.inputStream.use { input -> input.copyTo(output, bufferSize = STREAM_BUFFER_SIZE) }
                 output.flush()
             } ?: error("无法写入所选目录")
-            return target.name ?: targetName
+            val finalName = target.name ?: targetName
+            existingNames?.add(finalName)
+            return finalName
         } catch (error: Throwable) {
             target.delete()
             throw error
@@ -209,15 +255,22 @@ class SafDownloadController(
         }
     }
 
-    private fun uniqueName(directory: DocumentFile, requested: String): String {
-        if (directory.findFile(requested) == null) return requested
+    private fun uniqueName(
+        directory: DocumentFile,
+        requested: String,
+        existingNames: MutableSet<String>?,
+    ): String {
+        fun exists(name: String): Boolean =
+            if (existingNames != null) name in existingNames else directory.findFile(name) != null
+
+        if (!exists(requested)) return requested
         val dot = requested.lastIndexOf('.')
         val base = if (dot > 0) requested.substring(0, dot) else requested
         val extension = if (dot > 0) requested.substring(dot) else ""
         var index = 1
         while (index < 10_000) {
             val candidate = "$base-$index$extension"
-            if (directory.findFile(candidate) == null) return candidate
+            if (!exists(candidate)) return candidate
             index += 1
         }
         error("同名文件过多")
@@ -295,5 +348,10 @@ class SafDownloadController(
 
     override fun close() {
         worker.shutdownNow()
+        coverWorker.shutdownNow()
+    }
+
+    companion object {
+        private const val STREAM_BUFFER_SIZE = 64 * 1024
     }
 }

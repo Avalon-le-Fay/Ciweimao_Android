@@ -98,10 +98,28 @@ object FileTools {
         }
         require(source.canonicalFile != destination.canonicalFile) { "源文件与目标文件相同" }
         destination.parentFile?.let(::ensureDirectory)
-        source.inputStream().use { input ->
-            FileOutputStream(destination, false).use { output -> input.copyTo(output) }
+        val expectedLength = source.length()
+        val channelCopied = runCatching {
+            source.inputStream().channel.use { srcCh ->
+                FileOutputStream(destination, false).channel.use { dstCh ->
+                    var pos = 0L
+                    while (pos < expectedLength) {
+                        val transferred = srcCh.transferTo(pos, expectedLength - pos, dstCh)
+                        if (transferred <= 0L) break
+                        pos += transferred
+                    }
+                    pos == expectedLength
+                }
+            }
+        }.getOrDefault(false)
+        if (!channelCopied) {
+            source.inputStream().use { input ->
+                FileOutputStream(destination, false).use { output ->
+                    input.copyTo(output, bufferSize = 64 * 1024)
+                }
+            }
         }
-        check(destination.isFile && destination.length() == source.length()) { "复制结果校验失败" }
+        check(destination.isFile && destination.length() == expectedLength) { "复制结果校验失败" }
     }
 
     fun ensureDirectory(directory: File) {
