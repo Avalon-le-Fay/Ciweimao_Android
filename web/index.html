@@ -3367,13 +3367,26 @@ function renderFavDirs(dirs){
   box.querySelectorAll('[data-pick]').forEach(el=>{
     el.onclick=()=>{const input=$('#export-dir-input');input.dataset.userTouched='1';input.value=el.dataset.pick;};
   });
+  const current=Array.isArray(dirs)?dirs.slice():[];
   box.querySelectorAll('[data-del]').forEach(el=>{
     el.onclick=async(e)=>{
       e.stopPropagation();
+      if(el.dataset.removing==='1')return;
+      el.dataset.removing='1';
+      el.style.pointerEvents='none';
       const d=el.dataset.del;
-      if(!await confirmDialog({title:'从快捷列表移除',message:d+'\n（只移除快捷项，不会删除该文件夹）',icon:'📌',okText:'移除',primary:true})) return;
-      const r=await api('/api/settings/fav_dirs/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dir:d})});
-      if(r.ok){ renderFavDirs(r.dirs); toast('已移除'); }
+      try{
+        const r=await api('/api/settings/fav_dirs/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dir:d})});
+        if(r.ok){
+          renderFavDirs(Array.isArray(r.dirs)?r.dirs:current.filter(x=>x!==d));
+        }else{
+          el.dataset.removing='';el.style.pointerEvents='';
+          toast('移除失败: '+(r.error||'未知错误'));
+        }
+      }catch(err){
+        el.dataset.removing='';el.style.pointerEvents='';
+        toast('移除失败: '+(err&&err.message?err.message:err));
+      }
     };
   });
 }
