@@ -343,6 +343,22 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+
+    /** 检测到 APK 安装或覆盖升级时自动清理一次 WebView 网页缓存（保留 Cookie、localStorage 与全部小说数据）。 */
+    @Suppress("DEPRECATION")
+    private fun clearWebViewCacheIfUpdated() {
+        val currentUpdateTime = runCatching {
+            packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+        }.getOrDefault(-1L)
+        if (currentUpdateTime <= 0L) return
+        val prefs = getSharedPreferences("cwm_ui", MODE_PRIVATE)
+        val savedUpdateTime = prefs.getLong("webview_cache_update_time", -1L)
+        if (savedUpdateTime != currentUpdateTime) {
+            webView.clearCache(true)
+            prefs.edit().putLong("webview_cache_update_time", currentUpdateTime).apply()
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun configureWebView() {
         with(webView.settings) {
@@ -364,6 +380,7 @@ class MainActivity : AppCompatActivity() {
         val providerMajor = WebViewCompat.getCurrentWebViewPackage(this)?.versionName
             ?.substringBefore('.')?.toIntOrNull() ?: 0
         webViewOwnsImeViewport = providerMajor >= 139
+        clearWebViewCacheIfUpdated()
         CookieManager.getInstance().setAcceptCookie(true)
         webView.addJavascriptInterface(RootImportBridge(), "CwmAndroid")
         webView.setDownloadListener { url, _, contentDisposition, mimeType, _ ->

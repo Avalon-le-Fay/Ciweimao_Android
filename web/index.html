@@ -608,8 +608,10 @@ input[type=text], input[type=password],
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); 
   backdrop-filter:blur(6px);
 }
-.card:hover, .btn-ghost:hover{ background-color:rgba(255,255,255,0.4) !important; }
-input[type=text]:hover, input[type=password]:hover{ background-color:rgba(255,255,255,0.4) !important; }
+@media (hover:hover) and (pointer:fine){
+  .card:hover, .btn-ghost:hover{ background-color:rgba(255,255,255,0.4) !important; }
+  input[type=text]:hover, input[type=password]:hover{ background-color:rgba(255,255,255,0.4) !important; }
+}
 input[type=text]:focus, input[type=password]:focus{
   background-color:#fff !important; border-color:var(--blue);
 }
@@ -756,7 +758,7 @@ html[data-theme="dark"] .dl-sheet-card{background-color:rgba(28,28,32,0.86)}
   box-shadow:0 18px 55px rgba(0,0,0,.32)}
 html[data-theme="dark"] .cfm-box{background:rgba(28,28,32,0.9)}
 .cfm-title{font-size:17px;font-weight:700;color:var(--white);margin:0 0 8px}
-.cfm-msg{font-size:14px;color:var(--text);line-height:1.6;margin:0 0 20px;white-space:pre-line}.cfm-msg.html{text-align:left;white-space:normal}.cfm-msg b{color:var(--white);font-weight:750}
+.cfm-msg{font-size:14px;color:var(--text);line-height:1.6;margin:0 0 20px;white-space:pre-line;text-wrap:balance}.cfm-msg.html{text-align:left;white-space:normal}.cfm-msg b{color:var(--white);font-weight:750}
 .cfm-row{display:flex;gap:10px}
 .cfm-row button{flex:1;border:none;border-radius:12px;padding:11px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .12s,opacity .12s}
 .cfm-row button:active{transform:scale(.96);opacity:.85}
@@ -1445,7 +1447,8 @@ html[data-theme="dark"] .local-book .card.card-press{box-shadow:0 1px 4px rgba(0
   --tabs-bottom: calc(24px + var(--safe-bottom));
   bottom: var(--tabs-bottom) !important;
   left: 50% !important;
-  transform: translateX(-50%) !important;
+  transform: translate3d(-50%, 0, 0) !important;
+  will-change: transform, opacity;
   width: calc(100% - 32px) !important;
   max-width: 600px !important;
   z-index: 100 !important;
@@ -1622,12 +1625,22 @@ html[data-keyboard-open="true"] #dl-fab {
     visibility 0s linear .195s !important;
 }
 html[data-keyboard-open="true"] #dn { transform: translateY(140%) scale(.72) !important; }
-html[data-keyboard-open="true"] .tabs { transform: translateX(-50%) translateY(calc(100% + var(--tabs-bottom))) !important; }
+html[data-keyboard-open="true"] .tabs { transform: translate3d(-50%, calc(100% + var(--tabs-bottom)), 0) !important; }
 html[data-keyboard-open="true"] #dl-fab { transform: translateX(140%) scale(.72) !important; }
 @media (prefers-reduced-motion:reduce){
   html[data-keyboard-open="true"] .tabs,
   html[data-keyboard-open="true"] #dn,
   html[data-keyboard-open="true"] #dl-fab { transition: none !important; }
+}
+
+/* ===== 长列表滚动与底栏显隐性能优化（不影响视觉观感） ===== */
+/* 1. 列表卡片跳过屏幕外布局与绘制，书架几十上百本书也不拖慢滚动 */
+#shelf-list .card,
+#lib-list .card,
+#local-list .local-book,
+#out-list .dl-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
 }
 
 
@@ -1672,34 +1685,31 @@ html[data-theme="dark"] #accent-picker-open{background:transparent;border-color:
 <style>
 /* ===== 封面：点开看原图，图下方圆形按钮下载（走原生 SAF 目录） ===== */
 img.cover{cursor:zoom-in}
+.card:has(img.cover:active){transform:none!important}
 #cover-viewer{position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;
-  background:rgba(240,242,246,.20);
-  background:color-mix(in oklch, var(--bg) 20%, transparent);
-  -webkit-backdrop-filter:blur(28px) saturate(1.7);
-  backdrop-filter:blur(28px) saturate(1.7);
+  background:rgba(240,242,246,.32);
+  background:color-mix(in oklch, var(--bg) 32%, transparent);
+  -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  backdrop-filter:blur(22px) saturate(1.4);
   opacity:0;visibility:hidden;pointer-events:none;
   transition:opacity .2s var(--ease-out),visibility 0s linear .2s}
 #cover-viewer.show{opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}
 #cover-viewer img{max-width:92vw;max-height:78vh;border-radius:14px;object-fit:contain;border:1px solid rgba(255,255,255,.32);box-shadow:0 24px 70px rgba(0,0,0,.38);transform:scale(.94);transition:transform .22s var(--ease-out)}
 #cover-viewer.show img{transform:none}
 .cover-viewer-dl{width:52px;height:52px;padding:0;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--white);
-  background:rgba(255,255,255,.83);
-  background:color-mix(in oklch, var(--card) 83%, transparent);
-  -webkit-backdrop-filter:blur(21px) saturate(1.5);
-  backdrop-filter:blur(21px) saturate(1.5);
-  border:1px solid transparent;
+  background:rgba(255,255,255,.92);
+  background:color-mix(in oklch, var(--card) 92%, transparent);
+  border:1px solid rgba(255,255,255,.5);
   box-shadow:0 8px 22px rgba(20,30,45,.16),inset 0 1px 0 rgba(255,255,255,.55);
   opacity:0;transform:translateY(8px);
   transition:transform var(--dur-1) var(--ease-spring),box-shadow var(--dur-2) var(--ease-io),opacity var(--dur-2) var(--ease-io)}
-#cover-viewer.show .cover-viewer-dl{opacity:1;transform:none;transition-delay:.06s}
+#cover-viewer.show .cover-viewer-dl{opacity:1;transform:none;transition-delay:.04s}
 .cover-viewer-dl:active{transform:scale(.96)}
 .cover-viewer-dl .ic{width:24px;height:24px;vertical-align:0}
 .cover-viewer-close{position:absolute;top:calc(env(safe-area-inset-top) + 16px);right:calc(16px + env(safe-area-inset-right));width:42px;height:42px;border-radius:50%;cursor:pointer;color:var(--white);
-  background:rgba(255,255,255,.83);
-  background:color-mix(in oklch, var(--card) 83%, transparent);
-  -webkit-backdrop-filter:blur(21px) saturate(1.5);
-  backdrop-filter:blur(21px) saturate(1.5);
-  border:1px solid transparent;
+  background:rgba(255,255,255,.92);
+  background:color-mix(in oklch, var(--card) 92%, transparent);
+  border:1px solid rgba(255,255,255,.5);
   box-shadow:0 8px 22px rgba(20,30,45,.16),inset 0 1px 0 rgba(255,255,255,.55);
   transition:transform var(--dur-1) var(--ease-spring),box-shadow var(--dur-2) var(--ease-io),opacity var(--dur-2) var(--ease-io);
   font-size:20px;line-height:1}
@@ -1754,10 +1764,18 @@ img.cover{cursor:zoom-in}
 #chap-modal .modal-close{position:absolute;right:0;top:-4px;display:grid;place-items:center;width:44px;height:44px;min-width:44px;padding:0;border:0;border-radius:50%;background:#f5f5f7;color:#6e6e73;box-shadow:none;cursor:pointer;transition:transform .16s cubic-bezier(.23,1,.32,1),background-color .16s ease}
 #chap-modal .modal-close:active{transform:scale(.94)}
 #chap-modal .modal-close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
-#chap-modal .sub{margin:10px 0 16px;padding-right:48px;color:#6e6e73;font-size:15px;line-height:1.45;letter-spacing:-.2px;overflow-wrap:anywhere}
+#chap-modal .sub{margin:8px 0 11px;padding-right:48px;color:#6e6e73;font-size:15px;line-height:1.45;letter-spacing:-.2px;overflow-wrap:anywhere}
 #chap-modal .sub:empty{display:none}
-#chap-modal .chapter-summary{white-space:pre-line;padding:13px 15px;border-radius:16px;background:#f5f5f7;color:#1d1d1f;font-family:SF Pro Text,system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.45;letter-spacing:-.18px}
-#chap-modal .chapter-toolbar{display:flex;align-items:center;gap:8px;padding:14px 0 8px;color:#6e6e73;font-size:13px}
+#chap-modal .chapter-summary{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0;margin:0 0 4px;background:transparent;color:#6e6e73;font-family:SF Pro Text,system-ui,-apple-system,sans-serif;font-size:12.5px;line-height:1.35}
+#chap-modal .chapter-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:8px;background:#f2f3f5;color:#6e6e73;font-size:12px;line-height:1.3;white-space:nowrap;font-variant-numeric:tabular-nums}
+#chap-modal .chapter-chip b{font-weight:650;color:#1d1d1f}
+#chap-modal .chapter-chip.is-total{background:#e8ecf1;color:#1d1d1f;font-weight:600}
+#chap-modal .chapter-chip.is-pending{background:color-mix(in srgb,var(--chapter-blue) 12%,transparent);color:var(--chapter-blue)}
+#chap-modal .chapter-chip.is-pending b{color:var(--chapter-blue)}
+#chap-modal .chapter-chip.is-review{background:rgba(245,158,11,.13);color:#b45309}
+#chap-modal .chapter-chip.is-review b{color:#b45309}
+#chap-modal .chapter-toolbar-sel{margin-left:auto;color:var(--chapter-blue);font-size:12px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+#chap-modal .chapter-toolbar{display:flex;align-items:center;gap:8px;padding:5px 0 6px;color:#6e6e73;font-size:13px}
 #chap-modal .chapter-select-all{border:0;padding:5px 0;background:none;color:var(--chapter-blue);font:600 14px SF Pro Text,system-ui,sans-serif;cursor:pointer}
 #chap-modal .chapter-list{max-height:52vh;margin:0 -20px;padding:0 20px;overflow:auto;background:#fff}
 #chap-modal .chapter-list .empty{padding:24px 0;text-align:center;color:#86868b;font-size:13px}
@@ -1809,8 +1827,15 @@ img.cover{cursor:zoom-in}
 html[data-theme="dark"] #chap-modal .modal{background:#1d1d1f;color:#f5f5f7}
 html[data-theme="dark"] #chap-modal .chapter-list{background:#1d1d1f}
 html[data-theme="dark"] #chap-modal .chapter-head,html[data-theme="dark"] #chap-modal .chapter-row,html[data-theme="dark"] #chap-modal .chapter-total strong{color:#f5f5f7}
-html[data-theme="dark"] #chap-modal .chapter-summary,html[data-theme="dark"] #chap-modal .chapter-footer{background:rgba(39,39,41,.94)}
-html[data-theme="dark"] #chap-modal .chapter-summary{color:#f5f5f7}
+html[data-theme="dark"] #chap-modal .chapter-footer{background:rgba(39,39,41,.94)}
+html[data-theme="dark"] #chap-modal .chapter-summary{background:transparent;color:#a5aab4}
+html[data-theme="dark"] #chap-modal .chapter-chip{background:#2c2e33;color:#a5aab4}
+html[data-theme="dark"] #chap-modal .chapter-chip b{color:#f5f5f7}
+html[data-theme="dark"] #chap-modal .chapter-chip.is-total{background:#383b42;color:#f5f5f7}
+html[data-theme="dark"] #chap-modal .chapter-chip.is-pending{background:color-mix(in srgb,var(--chapter-blue) 18%,transparent);color:var(--chapter-blue)}
+html[data-theme="dark"] #chap-modal .chapter-chip.is-pending b{color:var(--chapter-blue)}
+html[data-theme="dark"] #chap-modal .chapter-chip.is-review{background:rgba(251,191,36,.16);color:#fbbf24}
+html[data-theme="dark"] #chap-modal .chapter-chip.is-review b{color:#fbbf24}
 html[data-theme="dark"] #chap-modal .chapter-footer .btn-ghost{background:#2a2a2c;color:#f5f5f7}
 @media (prefers-reduced-motion:reduce){#chap-modal .modal,#chap-modal .chapter-children,#chap-modal .chapter-caret{transition:none!important}}
 </style>
@@ -2457,7 +2482,7 @@ html[data-theme="dark"] .fr-card{background:color-mix(in srgb,var(--card) 97%,tr
     <div class="modal-heading"><div><span class="modal-eyebrow" id="chap-modal-title" tabindex="-1">下载范围</span></div><button type="button" class="modal-close" id="chap-modal-close" aria-label="关闭章节选择"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <p class="sub" id="chap-modal-sub"></p>
     <div class="chapter-summary" id="chap-summary">正在读取目录与价格…</div>
-    <div class="chapter-toolbar"><button type="button" class="chapter-select-all" id="chap-select-all">全选</button><span>选择分卷、章节组或单章</span></div>
+    <div class="chapter-toolbar"><button type="button" class="chapter-select-all" id="chap-select-all">全选</button><span>选择分卷、章节组或单章</span><span class="chapter-toolbar-sel" id="chap-toolbar-sel"></span></div>
     <div class="chapter-list" id="chap-list"><div class="empty">正在加载…</div></div>
     <div class="chapter-footer">
       <div class="chapter-total"><span>应付 <strong id="chap-selected-cost">0 币</strong></span><span>需购 <strong id="chap-purchase-count">0 章</strong></span><span><span id="chap-balance-label">余额</span> <b id="chap-available-balance">—</b></span><em class="chapter-need-note" id="chap-afford">未购章节会被跳过</em><small>已选 <strong id="chap-selected-count">0</strong> 章</small></div>
@@ -3541,18 +3566,10 @@ const exportCleanupToggle=$('#export-auto-cleanup');
 if(exportCleanupToggle)exportCleanupToggle.onclick=async()=>{
   if(exportCleanupSaving)return;
   const requested=!exportAutoCleanup;
-  if(requested&&!exportAutoCleanup){
-    const confirmed=await confirmDialog({
-      title:'开启自动清理',
-      message:'批量导出并确认复制成功后，将删除对应 output/ 成品，并清理该书的逐章 TXT、解密文本、图片和断点缓存。导出失败的文件会保留。是否开启？',
-      icon:'🧹',okText:'开启'
-    });
-    if(!confirmed){syncExportCleanupUI();return;}
-  }
   exportCleanupSaving=true;syncExportCleanupUI();
   try{
     const r=await api('/api/settings/export_cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:requested})});
-    if(r.ok){exportAutoCleanup=!!r.auto_cleanup;toast(exportAutoCleanup?'已开启导出后自动清理':'已关闭导出后自动清理');}
+    if(r.ok){exportAutoCleanup=!!r.auto_cleanup;}
     else toast('设置保存失败: '+(r.error||'未知错误'));
   }catch(e){
     toast('设置保存失败: '+(e&&e.message?e.message:e));
@@ -3726,7 +3743,7 @@ $('#btn-manual-go').onclick=()=>{
 // 卡片触摸反馈：按下轻压，松手后上抬并短暂显示聚光；卡内控件不带动父卡片。
 // 按钮 / 标签仍使用各自的泵动反馈，滚动手势不会触发 click 泵动。
 let _pd=null;
-const CARD_FEEDBACK_CONTROLS='button,input,select,textarea,label,a,summary,[role="button"],[contenteditable="true"],.icon-act';
+const CARD_FEEDBACK_CONTROLS='button,input,select,textarea,label,a,summary,[role="button"],[contenteditable="true"],.icon-act,img.cover';
 function cardAtTarget(target){if(!target||!target.closest||target.closest('[data-no-card-feedback]'))return null;const card=target.closest('.card,.ubox');return card&&card.getAttribute('data-card-feedback')!=='off'?card:null;}
 function isCardControlTarget(target,card){
   const control=target&&target.closest?target.closest(CARD_FEEDBACK_CONTROLS):null;
@@ -4838,6 +4855,7 @@ function openChapModal(bid,name){
   $('#chap-modal-sub').textContent=(name?('《'+name+'》'):'');
   $('#chap-list').innerHTML='<div class="empty">正在加载…</div>';
   $('#chap-summary').textContent='正在读取目录与价格…';
+  const _tsel=$('#chap-toolbar-sel');if(_tsel)_tsel.textContent='';
   $('#chap-selected-count').textContent='0';
   $('#chap-purchase-count').textContent='0 章';
   $('#chap-selected-cost').textContent='0 币';
@@ -4949,7 +4967,14 @@ function renderChapterSelection(data){
     box.indeterminate=st.on>0&&st.on<st.n;
   }
   function refreshSummary(){
-    summary.textContent='共'+total+'章 / 已购'+owned+' / 免费'+free+(unreviewed?' / 未审核'+unreviewed:'')+' / 待购'+(total-owned-free-unreviewed)+'\n已选'+checkedCount+'章';
+    const pendingBuy=Math.max(0,total-owned-free-unreviewed);
+    summary.innerHTML='<span class="chapter-chip is-total">共 '+total+' 章</span>'
+      +'<span class="chapter-chip">已购 <b>'+owned+'</b></span>'
+      +'<span class="chapter-chip">免费 <b>'+free+'</b></span>'
+      +'<span class="chapter-chip is-pending">待购 <b>'+pendingBuy+'</b></span>'
+      +'<span class="chapter-chip is-review">未审核 <b>'+unreviewed+'</b></span>';
+    const toolbarSel=$('#chap-toolbar-sel');
+    if(toolbarSel)toolbarSel.textContent=checkedCount>0?'已选 '+checkedCount:'';
     selectedCount.textContent=String(checkedCount);
     purchaseCount.textContent=String(purchase)+' 章';
     selectedCost.textContent=chapMoney(amount)+' 币';
@@ -5240,33 +5265,44 @@ function updateDlFab(tasks){
 }
 // 打开/关闭面板
 // ===== 点击下载：一个小球从按钮「扔进」右下角下载图标 =====
-function flyToDownload(fromEl, coverEl){
+function flyToDownload(fromEl){
   try{
     const fab=document.getElementById('dl-fab'); if(!fab||!fromEl) return;
+    /* 下载悬浮条出现时 #dl-fab 会被 display:none，此时测不到落点，跳过抛球动画。 */
+    if(window.getComputedStyle(fab).display==='none') return;
     const a=fromEl.getBoundingClientRect();
+    const wasResting=fab.classList.contains('show')&&!fab.classList.contains('scroll-hidden')&&!fab.classList.contains('swipe-hide');
     fab.classList.add('show');
+    fab.classList.remove('scroll-hidden','swipe-hide');
+    let b;
+    if(wasResting){
+      b=fab.getBoundingClientRect();
+    }else{
+      const prevTrans=fab.style.transition, prevTf=fab.style.transform;
+      fab.style.setProperty('transition','none','important');
+      fab.style.setProperty('transform','none','important');
+      b=fab.getBoundingClientRect();
+      if(prevTf) fab.style.transform=prevTf; else fab.style.removeProperty('transform');
+      void fab.offsetWidth;
+      if(prevTrans) fab.style.transition=prevTrans; else fab.style.removeProperty('transition');
+    }
     const ball=document.createElement('div');
     ball.className='dl-fly';
-    // 封面优先当飞行物；同页找该卡的 .cover img
-    let img = coverEl && coverEl.querySelector ? coverEl.querySelector('img') : null;
-    if(img && img.src){ ball.style.backgroundImage='url("'+img.src+'")'; ball.style.backgroundSize='cover'; ball.style.backgroundPosition='center'; }
+    const BALL_HALF=22;
     const sx=a.left+a.width/2, sy=a.top+a.height/2;
-    // 落点用 #dl-fab 的固定 CSS 几何算，避免读到弹入动画中途的错误矩形
-    const FAB_RIGHT=18, FAB_BOTTOM=100, FAB_SIZE=60;
-    const ex=window.innerWidth - FAB_RIGHT - FAB_SIZE/2;
-    const ey=window.innerHeight - FAB_BOTTOM - FAB_SIZE/2;
-    ball.style.left=sx+'px'; ball.style.top=sy+'px';
+    const ex=b.left+b.width/2, ey=b.top+b.height/2;
+    ball.style.left=(sx-BALL_HALF)+'px';
+    ball.style.top=(sy-BALL_HALF)+'px';
     document.body.appendChild(ball);
-    // 关键帧：先上抛(带弧线)再落入图标，同时缩小
-    const midX=(sx+ex)/2, peakY=Math.min(sy,ey)-90;   // 抛物线顶点
+    const dx=ex-sx, dy=ey-sy;
+    const midX=dx*0.5, peakY=Math.min(0,dy)-70;
     const anim=ball.animate([
-      {transform:'translate(-50%,-50%) scale(1)', offset:0, opacity:1},
-      {transform:'translate('+(midX-sx)+'px,'+(peakY-sy)+'px) scale(.7)', offset:.5, opacity:1},
-      {transform:'translate('+(ex-sx)+'px,'+(ey-sy)+'px) scale(.18)', offset:1, opacity:.4}
-    ],{duration:700, easing:'cubic-bezier(.5,-0.2,.4,1)'});
+      {transform:'translate3d(0,0,0) scale(.9)', offset:0, opacity:1},
+      {transform:'translate3d('+midX+'px,'+peakY+'px,0) scale(.62)', offset:.48, opacity:1},
+      {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(.22)', offset:1, opacity:.25}
+    ],{duration:580, easing:'cubic-bezier(.25,.46,.45,.94)', fill:'forwards'});
     anim.onfinish=()=>{
       ball.remove();
-      // 图标被砸中：弹一下 + 角标脉冲
       fab.classList.remove('hit'); void fab.offsetWidth; fab.classList.add('hit');
     };
   }catch(err){}
@@ -5752,14 +5788,14 @@ select.addEventListener('focus',load);select.addEventListener('pointerdown',load
   function open(src,name){
     if(!src)return;
     currentName=name?String(name):'';
-    img.src=src;img.alt=currentName;
+    if(img.src!==src)img.src=src;
+    img.alt=currentName;
     box.inert=false;
     box.classList.add('show');box.setAttribute('aria-hidden','false');
   }
   function close(){
     if(!box.classList.contains('show'))return;
     box.classList.remove('show');box.setAttribute('aria-hidden','true');box.inert=true;
-    setTimeout(function(){if(!box.classList.contains('show'))img.removeAttribute('src');},240);
   }
   function download(){
     var bridge=null;
@@ -5774,6 +5810,7 @@ select.addEventListener('focus',load);select.addEventListener('pointerdown',load
     var cover=e.target&&e.target.closest?e.target.closest('img.cover'):null;
     if(cover){
       e.stopPropagation();e.preventDefault();
+      if(typeof finishCardPointer==='function'){try{finishCardPointer(e,true);}catch(err){}}
       // 与 cwm 一致：书名取卡片上的 data-name，取不到再退回图片自身的 data-cover-name
       var card=cover.closest('.card');
       open(cover.currentSrc||cover.src,(card&&card.dataset.name)||cover.dataset.coverName||'');
