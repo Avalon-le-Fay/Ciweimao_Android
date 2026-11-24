@@ -10,6 +10,12 @@ class OutputSettingsRepository(private val paths: RuntimePaths) {
     private val exportDirectoryFile = paths.stateFile(".export_dir")
     private val autoCleanupFile = paths.stateFile(".export_auto_cleanup")
     private val favouriteDirectoriesFile = paths.stateFile(".export_favdirs")
+    private val hiddenDefaultsFile = paths.stateFile(".export_favdirs_hidden")
+    private val defaultDirectories = listOf(
+        "/storage/emulated/0/Download",
+        "/storage/emulated/0/Documents",
+        "/storage/emulated/0/Books",
+    )
 
     fun exportDirectory(): String = exportDirectoryFile
         .takeIf(File::isFile)
@@ -33,6 +39,15 @@ class OutputSettingsRepository(private val paths: RuntimePaths) {
             if (testFile.exists()) testFile.delete()
         }
         JsonFiles.writeTextAtomic(exportDirectoryFile, value)
+        val hidden = hiddenDefaults()
+        if (value in hidden) {
+            hidden.removeAll { it == value }
+            JsonFiles.writeStringList(hiddenDefaultsFile, hidden)
+        }
+        val favourites = favouriteDirectories()
+        if (value !in favourites) {
+            JsonFiles.writeStringList(favouriteDirectoriesFile, favourites + value)
+        }
         return value
     }
 
@@ -52,33 +67,41 @@ class OutputSettingsRepository(private val paths: RuntimePaths) {
     fun addFavouriteDirectory(rawPath: String): List<String> {
         val path = normalise(rawPath)
         require(path.isNotEmpty()) { "目录不能为空" }
+        val hidden = hiddenDefaults()
+        if (path in hidden) {
+            hidden.removeAll { it == path }
+            JsonFiles.writeStringList(hiddenDefaultsFile, hidden)
+        }
         val values = favouriteDirectories()
         if (path !in values) values += path
-        return JsonFiles.writeStringList(favouriteDirectoriesFile, values)
+        JsonFiles.writeStringList(favouriteDirectoriesFile, values)
+        return suggestions()
     }
 
     fun removeFavouriteDirectory(rawPath: String): List<String> {
         val path = normalise(rawPath)
-        return JsonFiles.writeStringList(
+        if (path in defaultDirectories) {
+            val hidden = hiddenDefaults()
+            if (path !in hidden) hidden += path
+            JsonFiles.writeStringList(hiddenDefaultsFile, hidden)
+        }
+        JsonFiles.writeStringList(
             favouriteDirectoriesFile,
             favouriteDirectories().filterNot { it == path },
         )
+        return suggestions()
     }
 
     fun suggestions(): List<String> {
-        val saved = exportDirectory()
         val user = favouriteDirectories()
-        val defaults = listOf(
-            "/storage/emulated/0/Download",
-            "/storage/emulated/0/Documents",
-            "/storage/emulated/0/Books",
-        )
+        val hidden = hiddenDefaults()
         return buildList {
-            if (saved.isNotEmpty()) add(saved)
             user.forEach { if (it !in this) add(it) }
-            defaults.forEach { if (it !in this) add(it) }
+            defaultDirectories.forEach { if (it !in hidden && it !in this) add(it) }
         }
     }
+
+    private fun hiddenDefaults(): MutableList<String> = JsonFiles.stringList(hiddenDefaultsFile)
 
     fun settingsJson(): JSONObject = JSONObject()
         .put("dir", exportDirectory())

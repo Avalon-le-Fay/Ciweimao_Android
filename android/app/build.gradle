@@ -42,6 +42,17 @@ android {
         // 构架
     }
 
+    // GitHub CI 传 -PabiSplits=true：额外产出 arm64-v8a 与 universal 两个包。
+    // 本地 / 调试构建不传该参数时仍是原来的单 APK。
+    splits {
+        abi {
+            enable project.hasProperty("abiSplits")
+            reset()
+            include "arm64-v8a", "armeabi-v7a"
+            universalApk true
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false

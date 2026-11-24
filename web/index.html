@@ -549,7 +549,9 @@ html[data-theme="dark"] #dn{ --theme-switch-icon-color:#0883ee; }  /* 暗色态�
 }
 .dl-row .ic{width:20px;height:20px;transform:translateY(-2px)}
 .dl-row .fn{flex:1;min-width:0;font-size:14px;white-space:normal;word-break:normal;overflow-wrap:anywhere;line-height:1.4}
-.dl-row .sz{font-size:12px;color:var(--gray)}
+.dl-row .sz{font-size:12px;color:var(--gray);line-height:1.35}
+.dl-row .tm{display:block;margin-top:2px;font-size:11px;color:var(--gray);font-weight:400;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dl-row .tm:empty{display:none}
 .spin{animation:sp 1s linear infinite;display:inline-block}
 @keyframes sp{to{transform:rotate(360deg)}}
 /* 点击“泵动”反馈（作用于按钮/标签/tab/图标按钮） */
@@ -1747,13 +1749,12 @@ img.cover{cursor:zoom-in}
 #chap-modal.show .modal{opacity:1;transform:translate3d(0,0,0)}
 #chap-modal.is-closing .modal{transition:transform var(--dur-overlay-out) cubic-bezier(.4,0,1,1),opacity var(--dur-overlay-out) var(--ease-out)}
 #chap-modal .modal-handle{width:34px;height:4px;border-radius:4px;background:#d2d2d7;opacity:.9;margin:0 auto 16px}
-#chap-modal .modal-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;padding:4px 0 0;border:0}
-#chap-modal .modal-eyebrow{display:block;font-family:SF Pro Text,system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;letter-spacing:-.1px;color:var(--chapter-blue);margin-bottom:4px}
-#chap-modal .modal-heading h3{font-family:SF Pro Display,system-ui,-apple-system,sans-serif;font-size:24px;font-weight:600;letter-spacing:-.38px;line-height:1.2;margin:3px 0;color:#1d1d1f}
-#chap-modal .modal-close{display:grid;place-items:center;width:44px;height:44px;min-width:44px;padding:0;border:0;border-radius:50%;background:#f5f5f7;color:#6e6e73;box-shadow:none;cursor:pointer;transition:transform .16s cubic-bezier(.23,1,.32,1),background-color .16s ease}
+#chap-modal .modal-heading{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px;padding:4px 0 0;border:0}
+#chap-modal .modal-eyebrow{display:block;font-family:SF Pro Text,system-ui,-apple-system,sans-serif;font-size:13px;font-weight:600;letter-spacing:-.1px;color:var(--chapter-blue);margin-bottom:0}
+#chap-modal .modal-close{position:absolute;right:0;top:-4px;display:grid;place-items:center;width:44px;height:44px;min-width:44px;padding:0;border:0;border-radius:50%;background:#f5f5f7;color:#6e6e73;box-shadow:none;cursor:pointer;transition:transform .16s cubic-bezier(.23,1,.32,1),background-color .16s ease}
 #chap-modal .modal-close:active{transform:scale(.94)}
 #chap-modal .modal-close svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
-#chap-modal .sub{margin:10px 0 16px;color:#6e6e73;font-size:15px;line-height:1.45;letter-spacing:-.2px;overflow-wrap:anywhere}
+#chap-modal .sub{margin:10px 0 16px;padding-right:48px;color:#6e6e73;font-size:15px;line-height:1.45;letter-spacing:-.2px;overflow-wrap:anywhere}
 #chap-modal .sub:empty{display:none}
 #chap-modal .chapter-summary{padding:13px 15px;border-radius:16px;background:#f5f5f7;color:#1d1d1f;font-family:SF Pro Text,system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.45;letter-spacing:-.18px}
 #chap-modal .chapter-toolbar{display:flex;align-items:center;gap:8px;padding:14px 0 8px;color:#6e6e73;font-size:13px}
@@ -2453,7 +2454,7 @@ html[data-theme="dark"] .fr-card{background:color-mix(in srgb,var(--card) 97%,tr
 <div class="modal-mask" id="chap-modal" aria-hidden="true" hidden inert>
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="chap-modal-title" aria-describedby="chap-modal-sub">
     <div class="modal-handle" aria-hidden="true"></div>
-    <div class="modal-heading"><div><span class="modal-eyebrow">下载范围</span><h3 id="chap-modal-title" tabindex="-1">指定章节下载</h3></div><button type="button" class="modal-close" id="chap-modal-close" aria-label="关闭章节选择"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div class="modal-heading"><div><span class="modal-eyebrow" id="chap-modal-title" tabindex="-1">下载范围</span></div><button type="button" class="modal-close" id="chap-modal-close" aria-label="关闭章节选择"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <p class="sub" id="chap-modal-sub"></p>
     <div class="chapter-summary" id="chap-summary">正在读取目录与价格…</div>
     <div class="chapter-toolbar"><button type="button" class="chapter-select-all" id="chap-select-all">全选</button><span>选择分卷、章节组或单章</span></div>
@@ -2860,6 +2861,16 @@ function initTheme(){
     }, {passive:true});
   })();
 }
+function fmtTime(ms){
+  const value=Number(ms);
+  if(!value) return '';
+  const d=new Date(value), now=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  const hm=pad(d.getHours())+':'+pad(d.getMinutes());
+  if(d.toDateString()===now.toDateString()) return hm;
+  if(d.getFullYear()===now.getFullYear()) return (d.getMonth()+1)+'-'+pad(d.getDate());
+  return d.getFullYear()+'-'+pad(d.getMonth()+1);
+}
 function fmtSize(b){
   if(b<1024) return b+' B';
   if(b<1048576) return (b/1024).toFixed(1)+' KB';
@@ -2970,7 +2981,7 @@ function renderOut(list,animate){
     + '<div class="check '+(on?'on':'')+'" data-check style="width:22px;height:22px;font-size:13px">'+(on?icon('check'):'')+'</div>'
     + '<span class="ic">'+icon(f.type==='epub'?'fileEpub':'fileText')+'</span>'
     + '<span class="fn">'+esc(f.name)+'</span>'
-    + '<span class="sz">'+fmtSize(f.size)+'</span>'
+    + '<span class="sz">'+fmtSize(f.size)+'<span class="tm">'+fmtTime(f.mtime)+'</span></span>'
     + '<a class="icon-act" href="/download/'+encodeURIComponent(f.name)+'" download data-dl title="下载到手机">'+icon('download')+'</a>'
     + '</div>';
   }).join('');
@@ -3213,7 +3224,9 @@ $('#btn-out-delete').onclick=async()=>{
 let exportDir='';
 let exportAutoCleanup=false;
 let exportCleanupSaving=false;
-let exportOptions={chapters:false,images:false};
+const EXPORT_OPTIONS_KEY='cwm.exportOptions.v1';
+let exportOptions=(function(){try{const saved=JSON.parse(localStorage.getItem(EXPORT_OPTIONS_KEY)||'{}');return {chapters:!!saved.chapters,images:!!saved.images};}catch(e){return {chapters:false,images:false};}})();
+function saveExportOptions(){try{localStorage.setItem(EXPORT_OPTIONS_KEY,JSON.stringify(exportOptions));}catch(e){}}
 function syncExportCleanupUI(){
   const row=$('#export-cleanup-setting'),toggle=$('#export-auto-cleanup'),state=$('#export-cleanup-state');
   if(toggle){toggle.setAttribute('aria-checked',exportAutoCleanup?'true':'false');toggle.disabled=exportCleanupSaving;}
@@ -3263,6 +3276,7 @@ if(exportOptionsToggle&&exportOptionsMenu){
       event.stopPropagation();
       const kind=option.dataset.exportOption;
       exportOptions[kind]=!exportOptions[kind];
+      saveExportOptions();
       syncExportOptionsUI();
     };
   });
@@ -4735,24 +4749,15 @@ function renderChapterSelection(data){
     if(availableBalance)availableBalance.textContent=balance==null?'—':chapMoney(balance)+' 币';
     /* 「未购章节会跳过」是固定文案，已放在「需购 x 章」下方，不再按数量改写 */
   }
-  function update(){
-    /* 单次遍历统计：以前每个组/分卷都重新 querySelectorAll 扫全表，324 章时是 O(N²)。 */
-    const rows=Array.prototype.slice.call(list.querySelectorAll('input[data-chapter-seq]'));
-    let amount=0, purchase=0, checkedCount=0;
-    const gStat=Object.create(null), dStat=Object.create(null);
-    for(let i=0;i<rows.length;i++){
-      const input=rows[i];
-      const row=input.closest('.chapter-row');
-      const price=row?(Number(row.dataset.price)||0):0;
-      const g=input.dataset.parent, d=input.dataset.division;
-      const gs=gStat[g]||(gStat[g]={n:0,on:0});
-      const ds=dStat[d]||(dStat[d]={n:0,on:0});
-      gs.n+=1; ds.n+=1;
-      if(input.checked){
-        gs.on+=1; ds.on+=1; checkedCount+=1; amount+=price;
-        if(price>0)purchase+=1;
-      }
-    }
+  let checkedCount=0, amount=0, purchase=0;
+  let gStat=Object.create(null), dStat=Object.create(null);
+  const groupBoxes=Object.create(null), divisionBoxes=Object.create(null);
+  function syncBox(box,st){
+    if(!box)return;
+    box.checked=st.n>0&&st.on===st.n;
+    box.indeterminate=st.on>0&&st.on<st.n;
+  }
+  function refreshSummary(){
     summary.textContent='共 '+total+' 章 · 已购 '+owned+' · 免费 '+free+(unreviewed?' · 未审核 '+unreviewed:'')+' · 待购 '+(total-owned-free-unreviewed)+' · 已选 '+checkedCount+' 章';
     selectedCount.textContent=String(checkedCount);
     purchaseCount.textContent=String(purchase)+' 章';
@@ -4760,31 +4765,69 @@ function renderChapterSelection(data){
     downloadButton.disabled=checkedCount===0;
     downloadButton.textContent='开始下载';
     renderAfford(amount,purchase);
-    list.querySelectorAll('input[data-group-check]').forEach(function(box){
-      const st=gStat[box.dataset.groupCheck]||{n:0,on:0};
-      box.checked=st.n>0&&st.on===st.n;
-      box.indeterminate=st.on>0&&st.on<st.n;
-    });
-    list.querySelectorAll('input[data-division-check]').forEach(function(box){
-      const st=dStat[box.dataset.divisionCheck]||{n:0,on:0};
-      box.checked=st.n>0&&st.on===st.n;
-      box.indeterminate=st.on>0&&st.on<st.n;
-    });
-    $('#chap-select-all').textContent=rows.length&&checkedCount===rows.length?'取消全选':'全选';
-    list.querySelectorAll('[data-group-total]').forEach(function(node){node.textContent=node.dataset.totalPrice==='0'?'免费':chapMoney(node.dataset.totalPrice)+'币';});
-    list.querySelectorAll('[data-division-total]').forEach(function(node){node.textContent=node.dataset.totalPrice==='0'?'免费':chapMoney(node.dataset.totalPrice)+'币';});
+    $('#chap-select-all').textContent=total>0&&checkedCount===total?'取消全选':'全选';
+  }
+  function update(){
+    /* 全量重算：只在全选 / 整组 / 整卷切换时走这里；单章勾选走 quickToggle。 */
+    const rows=list.querySelectorAll('input[data-chapter-seq]');
+    let nextAmount=0, nextPurchase=0, nextChecked=0;
+    const nextGroups=Object.create(null), nextDivisions=Object.create(null);
+    for(let i=0;i<rows.length;i++){
+      const input=rows[i];
+      const row=input.closest('.chapter-row');
+      const price=row?(Number(row.dataset.price)||0):0;
+      const g=input.dataset.parent, d=input.dataset.division;
+      const gs=nextGroups[g]||(nextGroups[g]={n:0,on:0});
+      const ds=nextDivisions[d]||(nextDivisions[d]={n:0,on:0});
+      gs.n+=1; ds.n+=1;
+      if(input.checked){
+        gs.on+=1; ds.on+=1; nextChecked+=1; nextAmount+=price;
+        if(price>0)nextPurchase+=1;
+      }
+    }
+    gStat=nextGroups; dStat=nextDivisions;
+    checkedCount=nextChecked; amount=nextAmount; purchase=nextPurchase;
+    Object.keys(groupBoxes).forEach(function(key){syncBox(groupBoxes[key],gStat[key]||{n:0,on:0});});
+    Object.keys(divisionBoxes).forEach(function(key){syncBox(divisionBoxes[key],dStat[key]||{n:0,on:0});});
+    refreshSummary();
+  }
+  function quickToggle(input){
+    /* 单章勾选：只改本组/本卷计数，不再扫全表。 */
+    const row=input.closest('.chapter-row');
+    const price=row?(Number(row.dataset.price)||0):0;
+    const g=input.dataset.parent, d=input.dataset.division;
+    const gs=gStat[g]||(gStat[g]={n:0,on:0});
+    const ds=dStat[d]||(dStat[d]={n:0,on:0});
+    const sign=input.checked?1:-1;
+    gs.on+=sign; ds.on+=sign;
+    checkedCount+=sign; amount+=sign*price;
+    if(price>0)purchase+=sign;
+    if(checkedCount<0)checkedCount=0;
+    if(amount<0)amount=0;
+    if(purchase<0)purchase=0;
+    syncBox(groupBoxes[g],gs);
+    syncBox(divisionBoxes[d],ds);
+    refreshSummary();
   }
   list.innerHTML=''; let volumeIndex=0;
   volumeGroups.forEach(function(volume){
     const divisionKey='volume-'+volumeIndex++, division=document.createElement('section'); division.className='chapter-level division-level';
     const volumeCost=volume.groups.reduce(function(sum,group){return sum+group.items.reduce(function(value,item){return value+(item.owned?0:item.price);},0);},0);
     division.innerHTML='<div class="chapter-head division-head"><button type="button" class="chapter-caret" aria-expanded="true">'+CARET_SVG+'</button><strong>'+esc(volume.name)+'</strong><span class="chapter-head-total" data-division-total data-total-price="'+volumeCost+'"></span><label class="chapter-check" aria-label="选择'+esc(volume.name)+'"><input type="checkbox" data-division-check="'+divisionKey+'">'+cwmCheckMarkup('round')+'</label></div><div class="chapter-children"><div class="cc-inner"></div></div>';
+    const divisionBox=division.querySelector('input[data-division-check]');
+    if(divisionBox)divisionBoxes[divisionKey]=divisionBox;
+    const divisionTotal=division.querySelector('[data-division-total]');
+    if(divisionTotal)divisionTotal.textContent=volumeCost===0?'免费':chapMoney(volumeCost)+'币';
     const divisionChildren=division.querySelector('.chapter-children>.cc-inner');
     volume.groups.forEach(function(group){
       const groupKey=divisionKey+'-group-'+group.startSequence, section=document.createElement('section'); section.className='chapter-level group-level';
       const groupCost=group.items.reduce(function(sum,item){return sum+(item.owned?0:item.price);},0);
       const first=group.items[0];
       section.innerHTML='<div class="chapter-head group-head"><button type="button" class="chapter-caret" aria-expanded="false">'+CARET_SVG+'</button><span>'+esc(first.chapter_title||('第'+first.sequence+'章'))+' <em>（共'+group.items.length+'章）</em></span><span class="chapter-head-total" data-group-total data-total-price="'+groupCost+'"></span><label class="chapter-check" aria-label="选择第'+first.sequence+'章组"><input type="checkbox" data-group-check="'+groupKey+'">'+cwmCheckMarkup('round')+'</label></div><div class="chapter-children"><div class="cc-inner"></div></div>';
+      const groupBox=section.querySelector('input[data-group-check]');
+      if(groupBox)groupBoxes[groupKey]=groupBox;
+      const groupTotal=section.querySelector('[data-group-total]');
+      if(groupTotal)groupTotal.textContent=groupCost===0?'免费':chapMoney(groupCost)+'币';
       const groupChildren=section.querySelector('.chapter-children>.cc-inner');
       group.items.forEach(function(item){
         const row=document.createElement('label'); row.className='chapter-row '+(item.owned?'is-owned ':'')+(item.pending?'is-unreviewed ':'');
@@ -4799,7 +4842,9 @@ function renderChapterSelection(data){
     list.appendChild(division); wireDisclosure(division,false);
     division.querySelector('input[data-division-check]').addEventListener('change',function(event){const checked=event.currentTarget.checked;list.querySelectorAll('input[data-division="'+divisionKey+'"]').forEach(function(input){input.checked=checked;});update();});
   });
-  list.addEventListener('change',function(event){if(event.target.matches('input[data-chapter-seq]'))update();});
+  if(list._chapterChange)list.removeEventListener('change',list._chapterChange);
+  list._chapterChange=function(event){const target=event.target;if(target&&target.matches&&target.matches('input[data-chapter-seq]'))quickToggle(target);};
+  list.addEventListener('change',list._chapterChange);
   list._chapterUpdate=update;
   update();
 }

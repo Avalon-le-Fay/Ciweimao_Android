@@ -57,7 +57,7 @@ class OnlineTaskQueue(
         var shouldStart = false
         var position = 0
         synchronized(lock) {
-            require(current?.request?.bookId != request.bookId) { "这本书正在下载中" }
+            require(!running || current?.request?.bookId != request.bookId) { "这本书正在下载中" }
             require(waiting.none { it.request.bookId == request.bookId }) { "这本书已在队列中" }
             val record = TaskRecord(request)
             records += record
@@ -151,6 +151,9 @@ class OnlineTaskQueue(
         while (true) {
             val record = synchronized(lock) {
                 if (waiting.isEmpty()) {
+                    // 队列空了必须清掉 current：否则同一本书的失败/完成任务会
+                    // 一直占着"正在下载"的判定，再点同一本书会被直接拒绝。
+                    current = null
                     running = false
                     queueIndex = queueTotal
                     return

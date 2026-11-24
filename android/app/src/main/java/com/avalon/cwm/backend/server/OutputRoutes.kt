@@ -20,7 +20,7 @@ internal class OutputRoutes(
             saveExportDirectory(session)
         path == "/api/settings/export_cleanup" -> exportCleanup(session)
         path == "/api/settings/fav_dirs" -> HttpSupport.json(
-            JSONObject().put("dirs", JSONArray(runtime.outputSettings.favouriteDirectories())),
+            JSONObject().put("dirs", JSONArray(runtime.outputSettings.suggestions())),
         )
         path == "/api/settings/fav_dirs/add" -> addFavourite(session)
         path == "/api/settings/fav_dirs/remove" -> removeFavourite(session)
@@ -69,19 +69,21 @@ internal class OutputRoutes(
 
     private fun addFavourite(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val path = HttpSupport.requestJson(session).optString("dir")
+        runtime.outputSettings.addFavouriteDirectory(path)
         return HttpSupport.json(
             JSONObject()
                 .put("ok", true)
-                .put("dirs", JSONArray(runtime.outputSettings.addFavouriteDirectory(path))),
+                .put("dirs", JSONArray(runtime.outputSettings.suggestions())),
         )
     }
 
     private fun removeFavourite(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val path = HttpSupport.requestJson(session).optString("dir")
+        runtime.outputSettings.removeFavouriteDirectory(path)
         return HttpSupport.json(
             JSONObject()
                 .put("ok", true)
-                .put("dirs", JSONArray(runtime.outputSettings.removeFavouriteDirectory(path))),
+                .put("dirs", JSONArray(runtime.outputSettings.suggestions())),
         )
     }
 
